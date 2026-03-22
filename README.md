@@ -1,10 +1,10 @@
 # 🔴 Portal Escarlate – Plataforma Inteligente de Análise de Notícias
 
 ## 👥 Integrantes
-Enzo Pistori Fontenele de Oliveira - 23.00768-0
-Luigi de Menezes Collesi - 23.00625-0
-Luigi de Lauand Botto - 23.01066-5
-Ruth Ramos Romeu - 22.01003-3
+- Enzo Pistori Fontenele de Oliveira - 23.00768-0
+- Luigi de Menezes Collesi - 23.00625-0
+- Luigi de Lauand Botto - 23.01066-5
+- Ruth Ramos Romeu - 22.01003-3
 
 ## 📌 Descrição do Projeto
 O Portal Escarlate é uma plataforma web que tem como objetivo central oferecer uma forma mais inteligente, organizada e crítica de consumir notícias.
@@ -13,9 +13,9 @@ Além disso, o sistema integra dados públicos relacionados a agentes políticos
 O Portal Escarlate busca transformar o consumo de informação em uma experiência mais clara, eficiente e consciente.
 
 ## 🚀 Funcionalidades
-Cadastro e autenticação de usuários
-Cadastro e visualização de notícias via links
-Processamento automático de notícias com IA (resumo e parafraseamento)
-Consulta de dados públicos sobre políticos
-Sistema de filtragem por categorias e relevância
-Notificações baseadas em eventos do sistema
+- Cadastro e autenticação de usuários
+- Cadastro e visualização de notícias via links
+- Processamento automático de notícias com IA (resumo e parafraseamento)
+- Consulta de dados públicos sobre políticos
+- Sistema de filtragem por categorias e relevância
+- Notificações baseadas em eventos do sistema
