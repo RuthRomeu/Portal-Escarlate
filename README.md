@@ -28,12 +28,41 @@ O projeto está sendo desenvolvido utilizando o padrão de **Microsserviços**, 
 O projeto utiliza o Supabase como banco de dados em nuvem. Crie um projeto na plataforma Supabase e rode o script localizado em `back/servico-auth/schema.sql` no editor SQL deles para criar as tabelas necessárias.
 
 **2. Variáveis de Ambiente (.env)**
-No diretório do microsserviço de autenticação (`back/servico-auth`), crie um arquivo `.env` com a seguinte estrutura:
-`SUPABASE_URL="https://sua-url-do-supabase.supabase.co"`
-`SUPABASE_SERVICE_ROLE_KEY="sua_chave_service_role_aqui"`
+
+Crie um arquivo `.env` na raiz do projeto utilizando `.env.example` como referência.
 
 **3. Inicialização dos Serviços**
 Abra terminais distintos para cada serviço e execute:
 - **Barramento:** `node index.js` (Porta 10000)
 - **Serviço de Auth:** `node index.js` (Porta 4000)
 - **Front-End:** `npm run dev` (Porta 3000)
+
+### Execução com Docker
+
+Crie a imagem Docker:
+
+```bash
+docker build -t portal-escarlate:dev .
+```
+
+Execute a aplicação localmente:
+
+```bash
+docker run \
+  --rm \
+  --name portal-escarlate-local \
+  -p "127.0.0.1:5173:5173" \
+  -v "$(pwd)/.env:/app/.env:ro" \
+  -e NODE_ENV="development" \
+  -e APP_URL="http://localhost:5173" \
+  -e FRONTEND_HOST="0.0.0.0" \
+  -e FRONTEND_PORT="5173" \
+  -e VITE_API_URL="http://127.0.0.1:3000" \
+  portal-escarlate:dev
+```
+
+Acesse a aplicação em:
+
+```text
+http://localhost:5173
+```
