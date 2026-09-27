@@ -61,3 +61,35 @@ O back-end é composto por 9 serviços independentes:
 * **NewsAPI.org:** Utilizada pelo News Service para a busca estruturada de artigos e notícias.
 * **OpenRouter:** Funciona como o Gateway de Inteligência Artificial para as requisições gerativas do AI Service.
 * **Gmail API / Google OAuth:** Utilizada pelo Email Service para envio de links transacionais e gestão de permissões administrativas de disparo.
+
+### Execução com Docker
+
+Crie um arquivo .env na raiz do projeto utilizando .env.example como referência.
+
+Crie a imagem Docker:
+
+```bash
+docker build -t portal-escarlate:dev .
+```
+
+Execute a aplicação localmente:
+
+```bash
+docker run \
+  --rm \
+  --name portal-escarlate-local \
+  -p "127.0.0.1:5173:5173" \
+  -v "$(pwd)/.env:/app/.env:ro" \
+  -e NODE_ENV="development" \
+  -e APP_URL="http://localhost:5173" \
+  -e FRONTEND_HOST="0.0.0.0" \
+  -e FRONTEND_PORT="5173" \
+  -e VITE_API_URL="http://127.0.0.1:3000" \
+  portal-escarlate:dev
+```
+
+Acesse a aplicação em:
+
+```text
+http://localhost:5173
+```
