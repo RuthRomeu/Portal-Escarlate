@@ -93,3 +93,64 @@ Acesse a aplicação em:
 ```text
 http://localhost:5173
 ```
+
+### Execução com Kubernetes
+
+O projeto possui um manifesto Kubernetes em:
+
+```text
+kubernetes/portal-escarlate.yaml
+```
+
+O manifesto cria:
+
+- um `Deployment` responsável pela execução da aplicação;
+- um `Pod` utilizando a imagem Docker `portal-escarlate:dev`;
+- um `Service` do tipo `NodePort` para disponibilizar a aplicação.
+
+Para execução em um cluster local utilizando Minikube, primeiro construa a imagem Docker:
+
+```bash
+docker build -t portal-escarlate:dev .
+```
+
+Carregue a imagem no Minikube:
+
+```bash
+minikube image load portal-escarlate:dev
+```
+
+Antes de criar o Pod, disponibilize o arquivo `.env` para o Kubernetes através de um Secret:
+
+```bash
+kubectl create secret generic portal-escarlate-env \
+  --from-file=.env=.env \
+  --dry-run=client \
+  -o yaml | kubectl apply -f -
+```
+
+Em seguida, instancie os recursos definidos no manifesto:
+
+```bash
+kubectl apply -f kubernetes/portal-escarlate.yaml
+```
+
+Para acompanhar a inicialização do Deployment:
+
+```bash
+kubectl rollout status deployment/portal-escarlate
+```
+
+Para verificar os recursos criados:
+
+```bash
+kubectl get deployment portal-escarlate
+kubectl get pods -l app=portal-escarlate
+kubectl get service portal-escarlate
+```
+
+Em um cluster Minikube, obtenha a URL da aplicação com:
+
+```bash
+minikube service portal-escarlate --url
+```
