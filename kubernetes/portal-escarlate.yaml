@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: portal-escarlate
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: portal-escarlate
+
+  template:
+    metadata:
+      labels:
+        app: portal-escarlate
+
+    spec:
+      containers:
+        - name: portal-escarlate
+          image: portal-escarlate:dev
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - containerPort: 5173
+
+          env:
+            - name: FRONTEND_HOST
+              value: "0.0.0.0"
+
+            - name: FRONTEND_PORT
+              value: "5173"
+
+            - name: VITE_API_URL
+              value: "http://127.0.0.1:3000"
+
+          volumeMounts:
+            - name: portal-escarlate-env
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+
+      volumes:
+        - name: portal-escarlate-env
+          secret:
+            secretName: portal-escarlate-env
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: portal-escarlate
+
+spec:
+  type: NodePort
+
+  selector:
+    app: portal-escarlate
+
+  ports:
+    - protocol: TCP
+      port: 5173
+      targetPort: 5173
+      nodePort: 30080
