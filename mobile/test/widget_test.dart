@@ -1,9 +1,3 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,20 +5,79 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:portal_escarlate_app/main.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('Exibe a tela de login', (tester) async {
+    await tester.pumpWidget(
+      const PortalEscarlateApp(),
+    );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    expect(find.text('Acesse o portal'), findsOneWidget);
+    expect(find.byKey(const Key('email-field')), findsOneWidget);
+    expect(find.byKey(const Key('password-field')), findsOneWidget);
+    expect(find.text('ENTRAR NO PORTAL'), findsOneWidget);
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+  testWidgets('Valida campos obrigatórios', (tester) async {
+    await tester.pumpWidget(
+      const PortalEscarlateApp(),
+    );
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    final button = find.byKey(const Key('enter-button'));
+
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Informe seu e-mail.'), findsOneWidget);
+    expect(find.text('Informe sua senha.'), findsOneWidget);
+  });
+
+  testWidgets('Permite mostrar e ocultar senha', (tester) async {
+    await tester.pumpWidget(
+      const PortalEscarlateApp(),
+    );
+
+    final showButton = find.byTooltip('Mostrar senha');
+
+    await tester.ensureVisible(showButton);
+    await tester.tap(showButton);
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Ocultar senha'), findsOneWidget);
+
+    final fields = find.byType(EditableText);
+    final passwordField = tester.widget<EditableText>(
+      fields.last,
+    );
+
+    expect(passwordField.obscureText, isFalse);
+  });
+
+  testWidgets('Não realiza autenticação real', (tester) async {
+    await tester.pumpWidget(
+      const PortalEscarlateApp(),
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('email-field')),
+      'usuario@exemplo.com',
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('password-field')),
+      'senha123',
+    );
+
+    final button = find.byKey(const Key('enter-button'));
+
+    await tester.ensureVisible(button);
+    await tester.tap(button);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Demonstração: autenticação ainda não integrada.',
+      ),
+      findsOneWidget,
+    );
   });
 }
