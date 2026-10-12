@@ -1,0 +1,24 @@
+
+import 'package:flutter/material.dart';
+
+import 'core/theme/portal_theme.dart';
+import 'features/auth/presentation/login_screen.dart';
+
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const PortalEscarlateApp());
+}
+
+class PortalEscarlateApp extends StatelessWidget {
+  const PortalEscarlateApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Portal Escarlate',
+      debugShowCheckedModeBanner: false,
+      theme: PortalTheme.dark,
+      home: const LoginScreen(),
+    );
+  }
+}
