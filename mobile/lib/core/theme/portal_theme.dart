@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 class PortalColors {
@@ -36,6 +35,5 @@ class PortalTheme {
       bodyMedium: TextStyle(color: PortalColors.text),
       bodyLarge: TextStyle(color: PortalColors.text),
     ),
-    selectionColor: PortalColors.gold,
   );
 }

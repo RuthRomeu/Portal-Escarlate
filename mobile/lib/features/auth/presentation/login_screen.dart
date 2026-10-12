@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/portal_theme.dart';
@@ -39,8 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
     FocusScope.of(context).unfocus();
 
     setState(() {
-      _message =
-          'Demonstração: autenticação ainda não integrada.';
+      _message = 'Demonstração: autenticação ainda não integrada.';
     });
   }
 
@@ -70,39 +68,25 @@ class _LoginScreenState extends State<LoginScreen> {
                 padding: EdgeInsets.all(isWide ? 24 : 0),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
-                    minHeight: constraints.maxHeight -
-                        (isWide ? 48 : 0),
+                    minHeight: constraints.maxHeight - (isWide ? 48 : 0),
                   ),
                   child: Center(
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        maxWidth: 1180,
-                      ),
+                      constraints: const BoxConstraints(maxWidth: 1180),
                       child: Container(
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(
-                            isWide ? 28 : 0,
-                          ),
+                          borderRadius: BorderRadius.circular(isWide ? 28 : 0),
                           border: isWide
-                              ? Border.all(
-                                  color: PortalColors.border,
-                                )
+                              ? Border.all(color: PortalColors.border)
                               : null,
                           color: const Color(0xAA140607),
                         ),
                         child: isWide
                             ? Row(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Expanded(
-                                    flex: 11,
-                                    child: _buildHero(true),
-                                  ),
-                                  Expanded(
-                                    flex: 9,
-                                    child: _buildPortal(true),
-                                  ),
+                                  Expanded(flex: 11, child: _buildHero(true)),
+                                  Expanded(flex: 9, child: _buildPortal(true)),
                                 ],
                               )
                             : Column(
@@ -277,10 +261,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _topic(String label) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 11,
-        vertical: 7,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(30),
         border: Border.all(color: PortalColors.border),
@@ -288,10 +269,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          color: PortalColors.muted,
-          fontSize: 12,
-        ),
+        style: const TextStyle(color: PortalColors.muted, fontSize: 12),
       ),
     );
   }
@@ -382,10 +360,7 @@ class _LoginScreenState extends State<LoginScreen> {
               onPressed: () => _showUnavailable('Cadastro'),
               child: const Text(
                 'CADASTRO',
-                style: TextStyle(
-                  color: PortalColors.muted,
-                  letterSpacing: 1.3,
-                ),
+                style: TextStyle(color: PortalColors.muted, letterSpacing: 1.3),
               ),
             ),
           ),
@@ -394,48 +369,29 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  InputDecoration _inputDecoration(
-    String hint, {
-    Widget? suffixIcon,
-  }) {
+  InputDecoration _inputDecoration(String hint, {Widget? suffixIcon}) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(
-        color: PortalColors.muted,
-        fontSize: 14,
-      ),
+      hintStyle: const TextStyle(color: PortalColors.muted, fontSize: 14),
       filled: true,
       fillColor: PortalColors.field,
       suffixIcon: suffixIcon,
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 16,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: PortalColors.border,
-        ),
+        borderSide: const BorderSide(color: PortalColors.border),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: PortalColors.gold,
-          width: 1.4,
-        ),
+        borderSide: const BorderSide(color: PortalColors.gold, width: 1.4),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: PortalColors.danger,
-        ),
+        borderSide: const BorderSide(color: PortalColors.danger),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: PortalColors.danger,
-          width: 1.4,
-        ),
+        borderSide: const BorderSide(color: PortalColors.danger, width: 1.4),
       ),
     );
   }
@@ -467,9 +423,7 @@ class _LoginScreenState extends State<LoginScreen> {
             textInputAction: TextInputAction.next,
             autofillHints: const [AutofillHints.username],
             autocorrect: false,
-            decoration: _inputDecoration(
-              'usuario@exemplo.com.br',
-            ),
+            decoration: _inputDecoration('usuario@exemplo.com.br'),
             validator: (value) {
               final email = value?.trim() ?? '';
 
@@ -477,9 +431,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 return 'Informe seu e-mail.';
               }
 
-              final validEmail = RegExp(
-                r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
-              );
+              final validEmail = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
 
               if (!validEmail.hasMatch(email)) {
                 return 'Informe um e-mail válido.';
@@ -501,9 +453,7 @@ class _LoginScreenState extends State<LoginScreen> {
             decoration: _inputDecoration(
               'Digite sua senha',
               suffixIcon: IconButton(
-                tooltip: _obscurePassword
-                    ? 'Mostrar senha'
-                    : 'Ocultar senha',
+                tooltip: _obscurePassword ? 'Mostrar senha' : 'Ocultar senha',
                 icon: Icon(
                   _obscurePassword
                       ? Icons.visibility_off_outlined
@@ -530,13 +480,11 @@ class _LoginScreenState extends State<LoginScreen> {
             runSpacing: 4,
             children: [
               TextButton(
-                onPressed: () =>
-                    _showUnavailable('Recuperação de senha'),
+                onPressed: () => _showUnavailable('Recuperação de senha'),
                 child: const Text('Esqueci minha senha'),
               ),
               TextButton(
-                onPressed: () =>
-                    _showUnavailable('Termos de uso'),
+                onPressed: () => _showUnavailable('Termos de uso'),
                 child: const Text('Termos de uso'),
               ),
             ],
@@ -604,9 +552,7 @@ class _LoginScreenState extends State<LoginScreen> {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: PortalColors.border,
-              ),
+              border: Border.all(color: PortalColors.border),
               color: PortalColors.background,
             ),
             child: Text(
