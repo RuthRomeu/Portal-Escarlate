@@ -1,0 +1,9 @@
+name: portal_http
+publish_to: none
+environment:
+  sdk: ^3.9.0
+resolution: workspace
+dependencies:
+  shelf: ^1.4.3
+  shelf_router: ^1.1.4
+  portal_core: any
