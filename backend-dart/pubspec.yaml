@@ -1,0 +1,28 @@
+name: portal_escarlate_backend
+publish_to: none
+environment:
+  sdk: ^3.9.0
+workspace:
+  - packages/portal_core
+  - packages/portal_contracts
+  - packages/portal_http
+  - packages/portal_events
+  - packages/portal_database
+  - packages/portal_external_api
+  - apps/api_gateway
+  - apps/auth_service
+  - apps/news_service
+  - apps/registration_service
+  - apps/ai_service
+  - apps/email_service
+  - apps/news_summary_service
+  - apps/article_summary_service
+  - apps/password_recovery_service
+dependencies:
+  portal_contracts: any
+  portal_core: any
+  api_gateway: any
+  shelf: ^1.4.3
+dev_dependencies:
+  test: ^1.33.0
+  lints: ^6.0.0

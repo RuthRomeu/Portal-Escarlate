@@ -1,0 +1,142 @@
+# Desenvolvimento local apenas. Não utilizar senhas ou exposição de portas em produção.
+x-base-service: &base-service
+  build:
+    context: .
+  restart: unless-stopped
+  depends_on:
+    nats:
+      condition: service_started
+    postgres:
+      condition: service_healthy
+  environment:
+    HTTP_HOST: 0.0.0.0
+    PORTAL_INTERNAL_TOKEN: ${PORTAL_INTERNAL_TOKEN:-local-dev-token-change-me}
+    NATS_URL: nats://nats:4222
+
+services:
+  nats:
+    image: nats:2.12-alpine
+    command: ["--jetstream", "--store_dir", "/data"]
+    ports:
+      - "127.0.0.1:4222:4222"
+    volumes:
+      - nats_data:/data
+
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: portal
+      POSTGRES_PASSWORD: ${PORTAL_DB_PASSWORD:-local-dev-password}
+      POSTGRES_DB: portal_dev
+    volumes:
+      - pg_data:/var/lib/postgresql
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U portal -d portal_dev"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "127.0.0.1:5433:5432"
+
+  api_gateway:
+    <<: *base-service
+    build: {context: ., args: {APP: api_gateway}}
+    environment:
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: 3100
+      PORTAL_INTERNAL_TOKEN: ${PORTAL_INTERNAL_TOKEN:-local-dev-token-change-me}
+      AUTH_SERVICE_URL: http://auth_service:3001
+      NEWS_SERVICE_URL: http://news_service:3002
+      REGISTRATION_SERVICE_URL: http://registration_service:3003
+      AI_SERVICE_URL: http://ai_service:3004
+      EMAIL_SERVICE_URL: http://email_service:3005
+      NEWS_SUMMARY_SERVICE_URL: http://news_summary_service:3006
+      ARTICLE_SUMMARY_SERVICE_URL: http://article_summary_service:3008
+      PASSWORD_RECOVERY_SERVICE_URL: http://password_recovery_service:3009
+    ports:
+      - "127.0.0.1:3100:3100"
+
+  auth_service:
+    <<: *base-service
+    build: {context: ., args: {APP: auth_service}}
+    environment:
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: 3001
+      PORTAL_INTERNAL_TOKEN: ${PORTAL_INTERNAL_TOKEN:-local-dev-token-change-me}
+      NATS_URL: nats://nats:4222
+      DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-local-dev-password}@postgres:5432/auth_db?sslmode=disable
+
+  news_service:
+    <<: *base-service
+    build: {context: ., args: {APP: news_service}}
+    environment:
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: 3002
+      PORTAL_INTERNAL_TOKEN: ${PORTAL_INTERNAL_TOKEN:-local-dev-token-change-me}
+      NATS_URL: nats://nats:4222
+      DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-local-dev-password}@postgres:5432/news_db?sslmode=disable
+
+  registration_service:
+    <<: *base-service
+    build: {context: ., args: {APP: registration_service}}
+    environment:
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: 3003
+      PORTAL_INTERNAL_TOKEN: ${PORTAL_INTERNAL_TOKEN:-local-dev-token-change-me}
+      NATS_URL: nats://nats:4222
+      DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-local-dev-password}@postgres:5432/registration_db?sslmode=disable
+
+  ai_service:
+    <<: *base-service
+    build: {context: ., args: {APP: ai_service}}
+    environment:
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: 3004
+      PORTAL_INTERNAL_TOKEN: ${PORTAL_INTERNAL_TOKEN:-local-dev-token-change-me}
+      NATS_URL: nats://nats:4222
+      DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-local-dev-password}@postgres:5432/ai_db?sslmode=disable
+
+  email_service:
+    <<: *base-service
+    build: {context: ., args: {APP: email_service}}
+    environment:
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: 3005
+      PORTAL_INTERNAL_TOKEN: ${PORTAL_INTERNAL_TOKEN:-local-dev-token-change-me}
+      NATS_URL: nats://nats:4222
+      DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-local-dev-password}@postgres:5432/email_db?sslmode=disable
+
+  news_summary_service:
+    <<: *base-service
+    build: {context: ., args: {APP: news_summary_service}}
+    environment:
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: 3006
+      PORTAL_INTERNAL_TOKEN: ${PORTAL_INTERNAL_TOKEN:-local-dev-token-change-me}
+      NATS_URL: nats://nats:4222
+      DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-local-dev-password}@postgres:5432/news_summary_db?sslmode=disable
+
+  article_summary_service:
+    <<: *base-service
+    build: {context: ., args: {APP: article_summary_service}}
+    environment:
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: 3008
+      PORTAL_INTERNAL_TOKEN: ${PORTAL_INTERNAL_TOKEN:-local-dev-token-change-me}
+      NATS_URL: nats://nats:4222
+      DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-local-dev-password}@postgres:5432/article_summary_db?sslmode=disable
+
+  password_recovery_service:
+    <<: *base-service
+    build: {context: ., args: {APP: password_recovery_service}}
+    environment:
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: 3009
+      PORTAL_INTERNAL_TOKEN: ${PORTAL_INTERNAL_TOKEN:-local-dev-token-change-me}
+      NATS_URL: nats://nats:4222
+      DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-local-dev-password}@postgres:5432/password_recovery_db?sslmode=disable
+
+volumes:
+  nats_data:
+  pg_data:

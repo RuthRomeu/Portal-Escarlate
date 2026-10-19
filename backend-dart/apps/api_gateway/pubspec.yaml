@@ -1,0 +1,10 @@
+name: api_gateway
+publish_to: none
+environment:
+  sdk: ^3.9.0
+resolution: workspace
+dependencies:
+  portal_core: any
+  portal_http: any
+  shelf: ^1.4.3
+  http: ^1.6.0

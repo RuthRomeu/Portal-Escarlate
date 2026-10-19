@@ -1,0 +1,5 @@
+name: portal_contracts
+publish_to: none
+environment:
+  sdk: ^3.9.0
+resolution: workspace
