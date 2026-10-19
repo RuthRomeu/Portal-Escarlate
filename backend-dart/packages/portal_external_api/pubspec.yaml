@@ -1,0 +1,7 @@
+name: portal_external_api
+publish_to: none
+environment:
+  sdk: ^3.9.0
+resolution: workspace
+dependencies:
+  http: ^1.6.0

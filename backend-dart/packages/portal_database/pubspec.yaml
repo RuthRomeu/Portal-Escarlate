@@ -1,0 +1,7 @@
+name: portal_database
+publish_to: none
+environment:
+  sdk: ^3.9.0
+resolution: workspace
+dependencies:
+  postgres: ^3.5.20

@@ -1,0 +1,8 @@
+name: portal_events
+publish_to: none
+environment:
+  sdk: ^3.9.0
+resolution: workspace
+dependencies:
+  dart_nats: ^1.6.1
+  portal_contracts: any
