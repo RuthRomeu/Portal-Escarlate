@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'core/theme/portal_theme.dart';
 import 'features/auth/presentation/login_screen.dart';
+import 'features/auth/presentation/register_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,6 +19,10 @@ class PortalEscarlateApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: PortalTheme.dark,
       home: const LoginScreen(),
+      routes: {
+        '/login': (_) => const LoginScreen(),
+        '/register': (_) => const RegisterScreen(),
+      },
     );
   }
 }

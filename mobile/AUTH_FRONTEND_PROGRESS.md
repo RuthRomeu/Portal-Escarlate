@@ -1,14 +1,14 @@
-# Etapas de autenticação Flutter — 1/6
+# Etapas de autenticação Flutter — 2/6
 
-Implementadas: **1** · Restantes: **5**
+Implementadas: **2** · Restantes: **4**
 
 - [x] 1. Login
-- [ ] 2. Cadastro
+- [x] 2. Cadastro
 - [ ] 3. Termos de uso
 - [ ] 4. Esqueci minha senha
 - [ ] 5. Redefinição de senha
 - [ ] 6. Verificação de e-mail
 
-Cada branch é descendente direta da anterior e contém um único commit de avanço (sem merge e sem squash). O último branch contém todas as telas e o histórico de todas as etapas.
+Cada branch parte do commit da etapa anterior; nenhuma alteração na `main`.
 
-Escopo: telas Flutter, validação local e navegação; chamadas de autenticação, emissão de e-mails e validação de tokens dependem da integração futura de backend. O contador visual aparece só em builds debug.
+As telas têm validação local e interface funcional, mas a autenticação real, os e-mails e os tokens só existirão após integrar o backend Dart.
