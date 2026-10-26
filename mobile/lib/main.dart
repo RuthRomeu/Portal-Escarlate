@@ -6,6 +6,7 @@ import 'features/auth/presentation/register_screen.dart';
 import 'features/auth/presentation/terms_screen.dart';
 import 'features/auth/presentation/forgot_password_screen.dart';
 import 'features/auth/presentation/reset_password_screen.dart';
+import 'features/auth/presentation/verify_email_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,11 +31,20 @@ class PortalEscarlateApp extends StatelessWidget {
       },
       onGenerateRoute: (settings) {
         final uri = Uri.tryParse(settings.name ?? '');
-        if (uri == null || uri.path != '/reset-password') return null;
-        return MaterialPageRoute<void>(
-          settings: settings,
-          builder: (_) => ResetPasswordScreen(code: uri.queryParameters['code']),
-        );
+        if (uri == null) return null;
+        if (uri.path == '/reset-password') {
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => ResetPasswordScreen(code: uri.queryParameters['code']),
+          );
+        }
+        if (uri.path == '/verify-email') {
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => VerifyEmailScreen(code: uri.queryParameters['code']),
+          );
+        }
+        return null;
       },
     );
   }

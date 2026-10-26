@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../auth_validators.dart';
 import 'auth_page.dart';
@@ -63,6 +64,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
       const SizedBox(height: 12),
       AuthAction('Criar acesso', onPressed: _submit),
       if (_notice != null) AuthNotice(_notice!),
+      if (kDebugMode) TextButton(
+        onPressed: () => Navigator.pushNamed(context, '/verify-email'),
+        child: const Text('Prévia: verificar e-mail'),
+      ),
     ])),
   );
 }
