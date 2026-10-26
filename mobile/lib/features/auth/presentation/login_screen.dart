@@ -485,7 +485,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: const Text('Esqueci minha senha'),
               ),
               TextButton(
-                onPressed: () => _showUnavailable('Termos de uso'),
+                onPressed: () => Navigator.pushNamed(context, '/terms'),
                 child: const Text('Termos de uso'),
               ),
             ],
