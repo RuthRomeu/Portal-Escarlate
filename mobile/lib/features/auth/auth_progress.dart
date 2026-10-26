@@ -4,7 +4,7 @@ import '../../core/theme/portal_theme.dart';
 
 class AuthProgressBadge extends StatelessWidget {
   const AuthProgressBadge({super.key});
-  static const completed = 3;
+  static const completed = 4;
   static const total = 6;
 
   @override
