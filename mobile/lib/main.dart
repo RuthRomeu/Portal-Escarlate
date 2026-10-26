@@ -5,6 +5,7 @@ import 'features/auth/presentation/login_screen.dart';
 import 'features/auth/presentation/register_screen.dart';
 import 'features/auth/presentation/terms_screen.dart';
 import 'features/auth/presentation/forgot_password_screen.dart';
+import 'features/auth/presentation/reset_password_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,6 +27,14 @@ class PortalEscarlateApp extends StatelessWidget {
         '/register': (_) => const RegisterScreen(),
         '/terms': (_) => const TermsScreen(),
         '/forgot-password': (_) => const ForgotPasswordScreen(),
+      },
+      onGenerateRoute: (settings) {
+        final uri = Uri.tryParse(settings.name ?? '');
+        if (uri == null || uri.path != '/reset-password') return null;
+        return MaterialPageRoute<void>(
+          settings: settings,
+          builder: (_) => ResetPasswordScreen(code: uri.queryParameters['code']),
+        );
       },
     );
   }

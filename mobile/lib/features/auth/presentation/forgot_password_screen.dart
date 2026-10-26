@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../auth_validators.dart';
 import 'auth_page.dart';
@@ -35,6 +36,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       const SizedBox(height: 18),
       AuthAction('Solicitar link de recuperação', onPressed: _submit),
       if (_notice != null) AuthNotice(_notice!),
+      if (kDebugMode) TextButton(
+        onPressed: () => Navigator.pushNamed(context, '/reset-password'),
+        child: const Text('Prévia: redefinir senha'),
+      ),
     ])),
   );
 }

@@ -1,12 +1,14 @@
-# Etapas de autenticação Flutter — 4/6
+# Etapas de autenticação Flutter — 5/6
 
-Implementadas: **4** · Restantes: **2**
+Implementadas: **5** · Restantes: **1**
 
 - [x] 1. Login
 - [x] 2. Cadastro
 - [x] 3. Termos de uso
 - [x] 4. Esqueci minha senha
-- [ ] 5. Redefinição de senha
+- [x] 5. Redefinição de senha
 - [ ] 6. Verificação de e-mail
 
-Histórico linear e cumulativo; a `main` permanece intocada. As telas são locais e não enviam solicitações de autenticação ao servidor.
+Branches são checkpoints cumulativos com um commit por tela. A `main` não foi alterada.
+
+A tela aceita o parâmetro de rota `/reset-password?code=...` (prévia); envio e consumo real de tokens dependem do backend.
