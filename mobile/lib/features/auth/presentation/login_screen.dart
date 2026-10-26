@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/portal_theme.dart';
+import '../auth_progress.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -357,7 +358,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           Expanded(
             child: TextButton(
-              onPressed: () => _showUnavailable('Cadastro'),
+              onPressed: () => Navigator.pushNamed(context, '/register'),
               child: const Text(
                 'CADASTRO',
                 style: TextStyle(color: PortalColors.muted, letterSpacing: 1.3),
@@ -480,11 +481,11 @@ class _LoginScreenState extends State<LoginScreen> {
             runSpacing: 4,
             children: [
               TextButton(
-                onPressed: () => _showUnavailable('Recuperação de senha'),
+                onPressed: () => Navigator.pushNamed(context, '/forgot-password'),
                 child: const Text('Esqueci minha senha'),
               ),
               TextButton(
-                onPressed: () => _showUnavailable('Termos de uso'),
+                onPressed: () => Navigator.pushNamed(context, '/terms'),
                 child: const Text('Termos de uso'),
               ),
             ],
@@ -564,6 +565,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
+          const AuthProgressBadge(),
         ],
       ),
     );
