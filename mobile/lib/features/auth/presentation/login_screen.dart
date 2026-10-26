@@ -481,7 +481,7 @@ class _LoginScreenState extends State<LoginScreen> {
             runSpacing: 4,
             children: [
               TextButton(
-                onPressed: () => _showUnavailable('Recuperação de senha'),
+                onPressed: () => Navigator.pushNamed(context, '/forgot-password'),
                 child: const Text('Esqueci minha senha'),
               ),
               TextButton(

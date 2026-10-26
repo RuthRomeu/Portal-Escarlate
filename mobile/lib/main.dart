@@ -4,6 +4,7 @@ import 'core/theme/portal_theme.dart';
 import 'features/auth/presentation/login_screen.dart';
 import 'features/auth/presentation/register_screen.dart';
 import 'features/auth/presentation/terms_screen.dart';
+import 'features/auth/presentation/forgot_password_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,6 +25,7 @@ class PortalEscarlateApp extends StatelessWidget {
         '/login': (_) => const LoginScreen(),
         '/register': (_) => const RegisterScreen(),
         '/terms': (_) => const TermsScreen(),
+        '/forgot-password': (_) => const ForgotPasswordScreen(),
       },
     );
   }
