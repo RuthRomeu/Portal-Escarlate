@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/portal_theme.dart';
+import '../auth_progress.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -564,6 +565,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
+          const AuthProgressBadge(),
         ],
       ),
     );
