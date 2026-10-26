@@ -358,7 +358,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           Expanded(
             child: TextButton(
-              onPressed: () => _showUnavailable('Cadastro'),
+              onPressed: () => Navigator.pushNamed(context, '/register'),
               child: const Text(
                 'CADASTRO',
                 style: TextStyle(color: PortalColors.muted, letterSpacing: 1.3),
