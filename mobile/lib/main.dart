@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'core/theme/portal_theme.dart';
 import 'features/auth/presentation/login_screen.dart';
 import 'features/auth/presentation/register_screen.dart';
+import 'features/auth/presentation/terms_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +23,7 @@ class PortalEscarlateApp extends StatelessWidget {
       routes: {
         '/login': (_) => const LoginScreen(),
         '/register': (_) => const RegisterScreen(),
+        '/terms': (_) => const TermsScreen(),
       },
     );
   }
