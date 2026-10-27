@@ -30,7 +30,7 @@ services:
       POSTGRES_DB: portal_dev
     volumes:
       - pg_data:/var/lib/postgresql
-      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./infrastructure/postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U portal -d portal_dev"]
       interval: 3s
@@ -46,6 +46,8 @@ services:
       HTTP_HOST: 0.0.0.0
       HTTP_PORT: 3100
       PORTAL_INTERNAL_TOKEN: ${PORTAL_INTERNAL_TOKEN:-local-dev-token-change-me}
+      APP_URL: ${APP_URL:-http://localhost:5173}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173}
       AUTH_SERVICE_URL: http://auth_service:3001
       NEWS_SERVICE_URL: http://news_service:3002
       REGISTRATION_SERVICE_URL: http://registration_service:3003
