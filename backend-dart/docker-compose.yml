@@ -65,6 +65,9 @@ services:
     environment:
       HTTP_HOST: 0.0.0.0
       HTTP_PORT: 3001
+      AUTH_SECRET: ${AUTH_SECRET:-local-dev-auth-secret-change-me}
+      APP_URL: ${APP_URL:-http://localhost:5173}
+      NODE_ENV: ${NODE_ENV:-development}
       PORTAL_INTERNAL_TOKEN: ${PORTAL_INTERNAL_TOKEN:-local-dev-token-change-me}
       NATS_URL: nats://nats:4222
       DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-local-dev-password}@postgres:5432/auth_db?sslmode=disable

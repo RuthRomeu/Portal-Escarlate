@@ -7,7 +7,7 @@ exclusivamente para eventos de domínio entre microsserviços.
 ## Etapas
 
 - [~] 1/6 Infraestrutura/Gateway — código implementado; validar Dart e Docker localmente
-- [ ] 2/6 Auth Service
+- [~] 2/6 Auth Service — endpoints implementados; testes Dart/Docker pendentes
 - [ ] 3/6 Email Service
 - [ ] 4/6 Registration Service
 - [ ] 5/6 Password Recovery Service
@@ -22,11 +22,20 @@ exclusivamente para eventos de domínio entre microsserviços.
 - Contratos nominais de eventos NATS portal.*. Sem proxy via barramento.
 - Testes unitários de roteamento e testes HTTP com upstream simulado.
 
+## 2/6 — Auth Service
+
+- Login, logout, sessão e endpoints HTTP internos de usuários.
+- Modelo users_2 em PostgreSQL, hashes PHC Argon2id e sessões HS256.
+- Dados de eventos de criação e alteração de senha gravados na outbox
+  na mesma transação dos dados de negócio.
+- Testes de rotas, cookies, autenticação interna e formatos legados.
+- Publicação outbox para NATS ainda pendente; NATS não é proxy HTTP.
+
 ## Limites
 
-O backend Node e o frontend não foram alterados. Os serviços Dart de negócio
-continuam apenas com health checks. Outbox/inbox ainda são tabelas sem workers
-e sem consumidores; não há migração de autenticação, e-mail ou tokens reais.
+O backend Node e o frontend não foram alterados. Somente Auth possui lógica de negócio Dart. Email, Registration e Recovery
+continuam apenas com health checks. A outbox de Auth ainda não tem worker,
+e os serviços Dart ainda não são substitutos de produção.
 Não substituir o backend ativo. Não considerar a etapa validada sem:
 
     cd backend-dart
@@ -39,3 +48,8 @@ Não substituir o backend ativo. Não considerar a etapa validada sem:
     curl http://localhost:3100/health/live
 
 Executar testes end-to-end de fluxo real apenas após as etapas de negócio.
+
+
+Validação adicional: dart test test/auth_service_test.dart; verificar a
+configuração AUTH_SECRET, as credenciais PostgreSQL e os logs do Compose.
+Execute dart format . antes da verificação final.
