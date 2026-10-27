@@ -22,6 +22,8 @@ dependencies:
   portal_contracts: any
   portal_core: any
   api_gateway: any
+  auth_service: any
+  portal_http: any
   shelf: ^1.4.3
 dev_dependencies:
   test: ^1.33.0

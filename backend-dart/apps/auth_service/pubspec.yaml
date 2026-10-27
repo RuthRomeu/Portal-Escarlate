@@ -4,4 +4,11 @@ environment:
   sdk: ^3.9.0
 resolution: workspace
 dependencies:
+  portal_core: any
+  portal_contracts: any
+  portal_database: any
   portal_http: any
+  shelf: ^1.4.3
+  shelf_router: ^1.1.4
+  crypto: ^3.0.6
+  hashlib: ^2.4.2

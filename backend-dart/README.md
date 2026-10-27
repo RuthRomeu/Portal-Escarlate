@@ -129,3 +129,23 @@ antes do commit para normalizar a formatação.
   implementados e validados nas respectivas etapas.
 - Testes de integração: dart test test/routing_test.dart
   test/gateway_proxy_test.dart. Testar também dart analyze e dart test.
+
+
+## 2/6 — Auth Service (ainda pendente de validação)
+
+O serviço Dart passou a conter endpoints compatíveis com o Auth Node:
+login, logout, consulta de sessão, existência/criação de usuário e troca
+de senha. O banco utilizado é auth_db.users_2.
+
+- Senhas PHC Argon2id compatíveis (19456 KiB, t=2, p=1).
+- Cookie portal_session HMAC-SHA256 com expiração de 7 dias.
+- Transações PostgreSQL gravam eventos na tabela event_outbox;
+  publicador NATS ainda será implementado nas próximas etapas.
+- Configure AUTH_SECRET no ambiente; o valor padrão no Compose é
+  exclusivamente para desenvolvimento local.
+- Teste com dart test test/auth_service_test.dart e execute dart analyze.
+- Node, React, Flutter e os serviços excluídos do escopo permanecem intactos.
+
+A implementação não foi validada em um SDK Dart local neste ambiente.
+Não exponha o Gateway ou o serviço de Auth Dart em produção até a suíte
+Dart, a migração de banco e os testes end-to-end passarem.
