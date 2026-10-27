@@ -5,8 +5,9 @@ continuam inalterados. Nenhum endpoint de negócio foi migrado.
 
 ## Componentes
 
-- Gateway HTTP síncrono: porta **3100**. Os caminhos `/api/{serviço}/...` são
-  encaminhados diretamente via HTTP; o event bus NÃO é usado como proxy.
+- Gateway HTTP síncrono: porta **3100**. Preserva as rotas públicas do Node
+  (`/api/auth/login`, `/api/auth/register/request`, etc.), encaminhando diretamente
+  para os respectivos serviços HTTP. O NATS NÃO atua como proxy.
 - Oito microsserviços com endpoint `GET /health/live` e isolamento por token
   interno para demais rotas.
 - `portal_events`: JetStream durável para eventos **internos**.
@@ -67,11 +68,14 @@ publicações pelo `eventId` dentro de sua janela de deduplicação configurada.
 - `GET /health/live` → saúde do Gateway
 - `GET /api/auth/health/live` → Auth service
 - `GET /api/news/health/live` → News service
-- Mesma regra para `registration`, `ai`, `email`, `news-summary`,
-  `article-summary`, `password-recovery`.
+- `POST /api/auth/login` → Auth (mesma rota, sem remover prefixos)
+- `POST /api/auth/register/request` e `GET /api/auth/verify-email` → Registration
+- `POST /api/auth/password/forgot` e `/reset` → Password Recovery
+- `/api/email-connections/*` e `/api/google/callback` → Email
+- Demais rotas de notícias e IA preservam seu serviço original.
 
-A raiz `/api/...` aqui é **nova**: o frontend React ainda aponta ao backend antigo.
-Não altere `VITE_API_URL` nesta etapa.
+A porta 3100 ainda não substitui a porta 3000: os serviços de negócio Dart
+estão em construção. Não alterar `VITE_API_URL` nesta etapa.
 
 ## Segurança e limites desta primeira etapa
 
@@ -79,9 +83,10 @@ Não altere `VITE_API_URL` nesta etapa.
 2. Os serviços só publicam HTTP na rede interna do Compose, exceto o Gateway.
 3. `GET /health/live` é público; demais caminhos exigem `x-internal-token`
    e o Gateway injeta esse header com um segredo local.
-4. O Gateway inicial não implementa autenticação de usuário, cookies
-   múltiplos, CORS cross-origin, streaming ou rate limiting. Não expô-lo
-   em produção até completar essas etapas.
+4. O Gateway encaminha múltiplos `Set-Cookie`, redirects, corpo da resposta
+   em stream, CORS com origens permitidas, timeout e limite de 1 MiB por request.
+   Sessões, autorização do usuário, limites distribuídos e CSRF completo
+   dependem das próximas etapas. **Não expor em produção** ainda.
 5. Eventos usam `at least once`: futuramente implementar inbox idempotente,
    outbox transacional e contratos por domínio antes de criar regras de negócio.
 6. Se o evento alimentar e-mail ou qualquer outra ação externa, não
@@ -105,3 +110,22 @@ possível executar `dart pub get`, `dart analyze`, `dart test` ou o smoke NATS.
 O workflow adicionado executará `dart analyze` e `dart test` no GitHub após
 o pacote ser incorporado ao repositório. Execute também `dart format .`
 antes do commit para normalizar a formatação.
+
+
+## Primeira etapa da migração (infraestrutura)
+
+- As rotas usadas pelo React são encaminhadas via HTTP síncrono, sem RPC por NATS.
+- Defina APP_URL e ALLOWED_ORIGINS (lista separada por vírgulas) no Gateway.
+  Origem fora da allowlist é rejeitada. Requests com cookies de sessão e
+  sem Origin/Referer são bloqueadas em métodos mutáveis; para clientes nativos
+  haverá autenticação apropriada nas etapas posteriores.
+- Em um PostgreSQL de desenvolvimento recém-criado, o Compose executa
+  init.sql e depois schema.sql, criando as tabelas de Auth, Email,
+  Registration e Recovery, com outbox/inbox iniciais.
+- **Volumes existentes não executam scripts de init novamente.** Aplicar
+  migrações explicitamente, após backup; não apagar volumes de produção.
+- Os tipos de evento portal.* estão declarados, mas publicação transacional
+  outbox, idempotência inbox e consumidores de domínio ainda serão
+  implementados e validados nas respectivas etapas.
+- Testes de integração: dart test test/routing_test.dart
+  test/gateway_proxy_test.dart. Testar também dart analyze e dart test.

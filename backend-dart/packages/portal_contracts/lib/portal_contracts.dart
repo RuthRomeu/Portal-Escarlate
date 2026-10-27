@@ -63,3 +63,16 @@ String newEventId() {
   final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
 }
+
+
+/// Contratos iniciais do barramento NATS (somente eventos assíncronos).
+/// Tokens e links secretos jamais devem ser persistidos nos payloads.
+abstract final class PortalEventTypes {
+  static const verificationRequested = 'portal.registration.verification_requested.v1';
+  static const emailVerified = 'portal.registration.email_verified.v1';
+  static const passwordRecoveryRequested = 'portal.password_recovery.requested.v1';
+  static const loginSucceeded = 'portal.auth.login_succeeded.v1';
+  static const passwordReset = 'portal.auth.password_reset.v1';
+  static const deliverySucceeded = 'portal.email.delivery_succeeded.v1';
+  static const deliveryFailed = 'portal.email.delivery_failed.v1';
+}
