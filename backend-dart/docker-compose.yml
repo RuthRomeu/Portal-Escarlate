@@ -42,12 +42,15 @@ services:
   api_gateway:
     <<: *base-service
     build: {context: ., args: {APP: api_gateway}}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       HTTP_HOST: 0.0.0.0
       HTTP_PORT: 3100
       PORTAL_INTERNAL_TOKEN: ${PORTAL_INTERNAL_TOKEN:-local-dev-token-change-me}
       APP_URL: ${APP_URL:-http://localhost:5173}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173}
+      LEGACY_BACKEND_URL: ${LEGACY_BACKEND_URL:-}
       AUTH_SERVICE_URL: http://auth_service:3001
       NEWS_SERVICE_URL: http://news_service:3002
       REGISTRATION_SERVICE_URL: http://registration_service:3003

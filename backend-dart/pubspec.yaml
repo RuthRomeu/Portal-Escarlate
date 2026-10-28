@@ -27,6 +27,7 @@ dependencies:
   registration_service: any
   password_recovery_service: any
   portal_events: any
+  portal_database: any
   http: ^1.6.0
   shelf_router: ^1.1.4
   portal_http: any

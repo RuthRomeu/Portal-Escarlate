@@ -1,7 +1,8 @@
 # Portal Escarlate — Backend Dart (fundação)
 
-Base técnica **aditiva**. O backend Node.js (`../backend`) e o React (`../frontend`)
-continuam inalterados. Nenhum endpoint de negócio foi migrado.
+Migração **aditiva** de Auth, Email, Registration e Password Recovery para Dart.
+O backend Node.js (`../backend`) e o React (`../frontend`) continuam inalterados.
+Os demais serviços Node não foram migrados.
 
 ## Componentes
 
@@ -224,3 +225,38 @@ a proteção contra abuso em múltiplas réplicas ainda exigem teste de campo.
 Esta versão ainda não substitui o Node em produção. Avaliar reentregas
 NATS, corrida de tokens, comunicação segura entre serviços, rate limiting
 distribuído e falha parcial entre atualização no Auth e consumo local.
+
+
+## Etapa 6/6 — integração e convivência híbrida
+
+Apenas Auth, Email, Registration e Password Recovery são serviços Dart de negócio.
+AI, News, News Summary e Article Summary continuam no Node; configure
+LEGACY_BACKEND_URL com a origem (ex.: http://host.docker.internal:3000)
+para encaminhar essas rotas preservando o caminho HTTP original. Se a
+variável não estiver definida, o Gateway NÃO roteia para os stubs Dart
+dessas quatro funcionalidades. Verifique a conectividade com Node antes
+de apontar o frontend para o Gateway Dart.
+
+Para teste controlado, a integração usa PostgreSQL e JetStream reais com
+um adaptador Gmail em memória. O teste lança processos Dart para Auth,
+Registration, Recovery e Gateway, publica/consome eventos de verdade,
+verifica emissão dos links por HTTP interno e completa cadastro, login,
+sessão e redefinição de senha. Não acessa contas Google.
+
+    cd backend-dart
+    dart pub get
+    dart analyze
+    dart test
+    docker compose config --quiet
+    docker compose up -d --wait postgres nats
+    RUN_DART_INTEGRATION=true dart test integration_test/backend_flow_test.dart
+    docker compose down -v
+
+O comando "down -v" é APENAS para o ambiente de CI descartável. Jamais
+executá-lo em um ambiente que contenha dados que precisem ser preservados.
+O middleware HTTP Dart não registra URLs completas com códigos sensíveis.
+
+A integração end-to-end ainda não verifica Google OAuth real, entrega
+efetiva pela Gmail API, rate limits distribuídos nem falhas de rede
+ambíguas. Os emissores NATS continuam opt-in via flags de ambiente.
+Este backend não está liberado para produção.

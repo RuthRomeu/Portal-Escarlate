@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:api_gateway/api_gateway.dart';
 import 'package:portal_core/portal_core.dart';
-import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 
 const services = <String, int>{
@@ -27,6 +26,27 @@ Future<void> main() async {
         url ?? 'http://127.0.0.1:' + service.value.toString());
   }
 
+  // Features not migrated to Dart keep running in the Node backend.
+  // An absent legacy URL must NOT accidentally route traffic to Dart stubs.
+  const legacyServices = ['news', 'ai', 'news-summary', 'article-summary'];
+  final legacyValue = Platform.environment['LEGACY_BACKEND_URL']?.trim();
+  if (legacyValue == null || legacyValue.isEmpty) {
+    for (final name in legacyServices) {
+      targets.remove(name);
+    }
+  } else {
+    final legacy = Uri.parse(legacyValue);
+    if (!(legacy.scheme == 'http' || legacy.scheme == 'https') ||
+        legacy.host.isEmpty || legacy.userInfo.isNotEmpty ||
+        legacy.pathSegments.where((segment) => segment.isNotEmpty).isNotEmpty ||
+        legacy.hasQuery || legacy.hasFragment) {
+      throw FormatException('LEGACY_BACKEND_URL deve ser uma origem HTTP(S).');
+    }
+    for (final name in legacyServices) {
+      targets[name] = legacy;
+    }
+  }
+
   final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
   final handler = buildGatewayHandler(
     targets: targets,
@@ -35,7 +55,7 @@ Future<void> main() async {
     client: client,
   );
   final server = await shelf_io.serve(
-    const Pipeline().addMiddleware(logRequests()).addHandler(handler),
+    handler,
     config.host,
     config.port,
   );
