@@ -10,7 +10,7 @@ exclusivamente para eventos de domínio entre microsserviços.
 - [~] 2/6 Auth Service — endpoints implementados; testes Dart/Docker pendentes
 - [~] 3/6 Email Service — rotas, Google OAuth, Gmail e consumidor NATS implementados; falta validar execução
 - [~] 4/6 Registration Service — implementado; validação Dart/CI e integração real pendentes
-- [ ] 5/6 Password Recovery Service
+- [~] 5/6 Password Recovery Service — código implementado; testes CI e integração real pendentes
 - [ ] 6/6 Testes integrados e compatibilidade
 
 ## 1/6 — Alterações desta branch
@@ -92,3 +92,29 @@ Execute dart format . antes da verificação final.
 Observação: a configuração não ativa o envio de mensagens automaticamente
 porque o consumidor de Email permanece desabilitado por padrão. Para teste
 integrado, habilitar as flags de ambos os serviços com credenciais de teste.
+
+
+## 5/6 — Password Recovery Service
+
+- POST /api/auth/password/forgot e POST /api/auth/password/reset?code=...
+- Validações do Node (e-mail, senha forte, confirmação); resposta genérica
+  não revela se a conta existe.
+- Token HMAC de 43 caracteres derivado de UUID e segredo exclusivo; PostgreSQL
+  persiste somente o hash SHA-256. Expiração: cinco minutos.
+- Requisição de recuperação e outbox NATS gravadas na mesma transação.
+- Mensagens NATS transportam exclusivamente requestId, nunca senha ou link.
+- Email Service consulta por HTTP interno autenticado:
+  GET /internal/password-recovery/email-requests/:requestId.
+- Atualização da senha via Auth HTTP interno antes da confirmação de consumo,
+  com SELECT FOR UPDATE para evitar dupla utilização concorrente.
+- Rate limit local: 3 solicitações/e-mail e 10/IP por cinco minutos.
+- Publisher NATS em worker opt-in até toda integração de Gmail estar pronta.
+
+## Limitações da etapa 5
+
+Validar teste de integração real com PostgreSQL, NATS, Gmail e Docker, além
+de cenários de falha transitória. Uma falha após o Auth confirmar a alteração,
+mas antes do commit local, poderá ocasionar atualização repetida em nova
+tentativa; a semântica é recuperável, porém a atomicidade entre bancos de
+serviços distintos não pode ser garantida sem coordenação adicional.
+O rate limiting ainda não é distribuído.

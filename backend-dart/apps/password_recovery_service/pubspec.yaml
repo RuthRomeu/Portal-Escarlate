@@ -5,3 +5,11 @@ environment:
 resolution: workspace
 dependencies:
   portal_http: any
+  portal_core: any
+  portal_contracts: any
+  portal_database: any
+  portal_events: any
+  http: ^1.6.0
+  shelf: ^1.4.3
+  shelf_router: ^1.1.4
+  crypto: ^3.0.6

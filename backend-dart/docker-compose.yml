@@ -151,6 +151,10 @@ services:
     environment:
       HTTP_HOST: 0.0.0.0
       HTTP_PORT: 3009
+      AUTH_SERVICE_URL: http://auth_service:3001
+      APP_URL: ${APP_URL:-http://localhost:5173}
+      PASSWORD_RECOVERY_TOKEN_SECRET: ${PASSWORD_RECOVERY_TOKEN_SECRET:-local-password-recovery-secret-only-dev-2026}
+      PASSWORD_RECOVERY_EVENTS_ENABLED: ${PASSWORD_RECOVERY_EVENTS_ENABLED:-false}
       PORTAL_INTERNAL_TOKEN: ${PORTAL_INTERNAL_TOKEN:-local-dev-token-change-me}
       NATS_URL: nats://nats:4222
       DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-local-dev-password}@postgres:5432/password_recovery_db?sslmode=disable

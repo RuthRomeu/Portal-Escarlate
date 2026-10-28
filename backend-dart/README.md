@@ -201,3 +201,26 @@ EMAIL_EVENTS_ENABLED somente em integração controlada.
 A construção e testes do código passam pelo GitHub Actions. A operação
 com credenciais reais Google e PostgreSQL, a publicação/entrega NATS e
 a proteção contra abuso em múltiplas réplicas ainda exigem teste de campo.
+
+
+## 5/6 — Password Recovery Service
+
+- `POST /api/auth/password/forgot` inicia a recuperação com resposta
+  indistinguível para e-mails existentes e inexistentes.
+- `POST /api/auth/password/reset?code=...` valida senha e código, solicita
+  atualização ao Auth por HTTP interno e consome o token após confirmação.
+- PostgreSQL em `password_recovery_db.password_recovery_tokens` armazena
+  somente hash de código e metadados de expiração/uso único.
+- A outbox transacional publica `portal.password_recovery.requested.v1`,
+  contendo apenas o requestId, para o consumidor Email JetStream.
+- Email obtém o destinatário e o link por HTTP interno autenticado.
+- Configure `PASSWORD_RECOVERY_TOKEN_SECRET` (segredo exclusivo >=32 chars),
+  `APP_URL`, `AUTH_SERVICE_URL` e `PORTAL_INTERNAL_TOKEN`.
+- `PASSWORD_RECOVERY_EVENTS_ENABLED=false` por padrão. Para testar envio,
+  configure também `EMAIL_EVENTS_ENABLED=true` e credenciais Gmail de teste.
+- Testar: `dart analyze`, `dart test` e
+  `dart test test/password_recovery_service_test.dart`.
+
+Esta versão ainda não substitui o Node em produção. Avaliar reentregas
+NATS, corrida de tokens, comunicação segura entre serviços, rate limiting
+distribuído e falha parcial entre atualização no Auth e consumo local.
