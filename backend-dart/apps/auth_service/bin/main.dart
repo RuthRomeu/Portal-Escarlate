@@ -31,7 +31,7 @@ Future<void> main() async {
       appUrl: Platform.environment['APP_URL'],
     );
     await runService(
-        name: 'auth', port: 3001, registerRoutes: api.registerRoutes);
+        name: 'auth', port: 3001, registerRoutes: (router, _) => api.registerRoutes(router));
   } catch (error) {
     stderr.writeln('[auth] Falha ao iniciar: ' + error.runtimeType.toString());
     await database.close();

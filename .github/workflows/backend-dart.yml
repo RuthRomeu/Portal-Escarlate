@@ -1,0 +1,28 @@
+name: Dart backend checks
+
+on:
+  push:
+    branches:
+      - 'backend/dart-*'
+  pull_request:
+    paths:
+      - 'backend-dart/**'
+      - '.github/workflows/backend-dart.yml'
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend-dart
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Resolve Dart workspace
+        run: dart pub get
+      - name: Analyze Dart source
+        run: dart analyze
+      - name: Execute Dart tests
+        run: dart test

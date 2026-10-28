@@ -90,7 +90,10 @@ CREATE TABLE IF NOT EXISTS event_outbox (
 CREATE TABLE IF NOT EXISTS event_inbox (
   event_id uuid PRIMARY KEY,
   type text NOT NULL,
-  processed_at timestamptz NOT NULL DEFAULT now()
+  status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'processed')),
+  claimed_until timestamptz,
+  processed_at timestamptz
 );
+CREATE INDEX IF NOT EXISTS email_inbox_pending_idx ON event_inbox(status, claimed_until);
 CREATE INDEX IF NOT EXISTS email_outbox_pending_idx
   ON event_outbox(occurred_at) WHERE published_at IS NULL;
