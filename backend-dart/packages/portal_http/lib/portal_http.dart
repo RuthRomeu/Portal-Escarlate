@@ -33,7 +33,6 @@ Future<HttpServer> runService({
         {'status': 'ok', 'service': config.name}));
   registerRoutes?.call(routes, config);
   final handler = const Pipeline()
-      .addMiddleware(logRequests())
       .addMiddleware(internalAccess(config.internalToken))
       .addHandler(routes.call);
   final server = await shelf_io.serve(handler, config.host, config.port);
