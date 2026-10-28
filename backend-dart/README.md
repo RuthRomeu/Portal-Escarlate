@@ -149,3 +149,33 @@ de senha. O banco utilizado é auth_db.users_2.
 A implementação não foi validada em um SDK Dart local neste ambiente.
 Não exponha o Gateway ou o serviço de Auth Dart em produção até a suíte
 Dart, a migração de banco e os testes end-to-end passarem.
+
+
+## Etapa 3/6 — Email Service (não validada em produção)
+
+Serviço Dart implementado em apps/email_service, com rotas de administração
+compatíveis com Node: GET /api/email-connections,
+POST /api/email-connections/google/start,
+GET /api/email-connections/google/callback (ou /api/google/callback),
+PATCH /api/email-connections/:id/priority e DELETE /api/email-connections/:id.
+
+- APP_URL: origem do frontend para onde o OAuth redireciona.
+- AUTH_SECRET: mesma chave das sessões Auth Node/Dart.
+- SECRETS_ENCRYPTION_KEY: mesma chave de cifragem Node para enc:v1:.
+- GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET e GOOGLE_REDIRECT_URI: OAuth Google.
+- EMAIL_EVENTS_ENABLED: false até Registration e Recovery implementarem os
+  endpoints internos GET /internal/registration/email-requests/:requestId e
+  GET /internal/password-recovery/email-requests/:requestId.
+- O barramento transporta somente IDs; dados de e-mail e links secretos são
+  obtidos por HTTP interno autenticado, nunca gravados no JetStream.
+- O consumidor é at-least-once. A deduplicação por event_id protege o estado
+  persistido, mas envios externos podem ser repetidos após falhas ambíguas.
+- Se o banco já foi inicializado, aplicar migrations/001_email_inbox.sql
+  manualmente após backup. Scripts do diretório init só rodam em volume novo.
+- Testes: dart test test/email_service_test.dart e
+  dart test test/email_events_test.dart, além de dart analyze e dart test.
+
+A configuração padrão do Compose para Google é apenas um placeholder de
+laboratório: não permite OAuth real. Configure credenciais de teste na .env.
+Não exponha as portas internas dos serviços nem configure segredos padrão
+em produção. O backend Node e os quatro serviços fora do escopo não mudam.

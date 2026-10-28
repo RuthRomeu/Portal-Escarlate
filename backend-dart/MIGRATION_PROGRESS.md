@@ -8,7 +8,7 @@ exclusivamente para eventos de domínio entre microsserviços.
 
 - [~] 1/6 Infraestrutura/Gateway — código implementado; validar Dart e Docker localmente
 - [~] 2/6 Auth Service — endpoints implementados; testes Dart/Docker pendentes
-- [ ] 3/6 Email Service
+- [~] 3/6 Email Service — rotas, Google OAuth, Gmail e consumidor NATS implementados; falta validar execução
 - [ ] 4/6 Registration Service
 - [ ] 5/6 Password Recovery Service
 - [ ] 6/6 Testes integrados e compatibilidade
@@ -53,3 +53,25 @@ Executar testes end-to-end de fluxo real apenas após as etapas de negócio.
 Validação adicional: dart test test/auth_service_test.dart; verificar a
 configuração AUTH_SECRET, as credenciais PostgreSQL e os logs do Compose.
 Execute dart format . antes da verificação final.
+
+
+## 3/6 — Email Service (implementação proposta)
+
+- Conexões Gmail em email_db.email_connections, com prioridade e CRUD administrativo.
+- Refresh tokens AES-256-GCM com prefixo enc:v1:, compatível com Node.
+- OAuth 2.0 Google: autorização por admin, state HMAC e callback com redirect.
+- Envio Gmail API em MIME texto + HTML, usando OAuth refresh token.
+- Consumo NATS JetStream usando requestId (sem tokens/link secreto no evento).
+- Consulta HTTP interna dos dados do e-mail e registro inbox/outbox.
+- EMAIL_EVENTS_ENABLED=false até Registration e Recovery exporem as rotas de lookup.
+- Migração 001_email_inbox.sql requerida para volumes PostgreSQL existentes.
+- Testes unitários/mocks adicionados, mas SDK Dart e Docker não foram executados.
+
+### Antes de aprovar 3/6
+
+- dart pub get; dart format .; dart analyze; dart test.
+- docker compose config; docker compose up --build -d.
+- Validar oauth.callback real e Gmail usando credenciais de teste.
+- Validar a criptografia com um token enc:v1: produzido pelo Node.
+- Validar idempotência, retentativas e desligamento dos consumidores no NATS.
+- Não usar em produção enquanto as etapas dependentes estiverem incompletas.
