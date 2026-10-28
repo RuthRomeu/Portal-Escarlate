@@ -179,3 +179,25 @@ A configuração padrão do Compose para Google é apenas um placeholder de
 laboratório: não permite OAuth real. Configure credenciais de teste na .env.
 Não exponha as portas internas dos serviços nem configure segredos padrão
 em produção. O backend Node e os quatro serviços fora do escopo não mudam.
+
+
+## Etapa 4/6 — Registration Service
+
+POST /api/auth/register/request e /api/auth/register validam os campos,
+consultam Auth via HTTP e registram uma solicitação pendente no PostgreSQL.
+GET /api/auth/verify-email confirma um código único e cria o usuário via
+HTTP interno. O controle de concorrência utiliza FOR UPDATE no token.
+
+O pedido contém somente requestId na outbox e no NATS. O Email Service
+obtém o link por GET interno autenticado em
+/internal/registration/email-requests/:requestId. A senha não sai do banco
+Registration, exceto seu hash Argon2id enviado ao Auth no momento da criação.
+
+REGISTRATION_TOKEN_SECRET precisa ser um segredo exclusivo com >=32 chars;
+não compartilhar o valor com o frontend nem versionar segredos de produção.
+REGISTRATION_EVENTS_ENABLED=false por padrão; habilite junto com
+EMAIL_EVENTS_ENABLED somente em integração controlada.
+
+A construção e testes do código passam pelo GitHub Actions. A operação
+com credenciais reais Google e PostgreSQL, a publicação/entrega NATS e
+a proteção contra abuso em múltiplas réplicas ainda exigem teste de campo.
