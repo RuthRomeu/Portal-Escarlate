@@ -88,6 +88,10 @@ services:
     environment:
       HTTP_HOST: 0.0.0.0
       HTTP_PORT: 3003
+      AUTH_SERVICE_URL: http://auth_service:3001
+      APP_URL: ${APP_URL:-http://localhost:5173}
+      REGISTRATION_TOKEN_SECRET: ${REGISTRATION_TOKEN_SECRET:-local-registration-token-secret-only-dev}
+      REGISTRATION_EVENTS_ENABLED: ${REGISTRATION_EVENTS_ENABLED:-false}
       PORTAL_INTERNAL_TOKEN: ${PORTAL_INTERNAL_TOKEN:-local-dev-token-change-me}
       NATS_URL: nats://nats:4222
       DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-local-dev-password}@postgres:5432/registration_db?sslmode=disable

@@ -146,6 +146,13 @@ Handler buildGatewayHandler({
         final value = request.headers[name];
         if (value != null) upstream.headers.set(name, value);
       }
+      // Never trust x-forwarded-for supplied by a public client.
+      final info = request.context['shelf.io.connection_info'];
+      if (info is HttpConnectionInfo) {
+        upstream.headers.set('x-forwarded-for', info.remoteAddress.address);
+      } else {
+        upstream.headers.set('x-forwarded-for', 'unknown');
+      }
       upstream.headers.set('x-internal-token', internalToken);
       final body = data.takeBytes();
       upstream.contentLength = body.length;

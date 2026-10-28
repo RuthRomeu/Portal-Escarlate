@@ -24,6 +24,7 @@ dependencies:
   api_gateway: any
   auth_service: any
   email_service: any
+  registration_service: any
   portal_events: any
   http: ^1.6.0
   shelf_router: ^1.1.4

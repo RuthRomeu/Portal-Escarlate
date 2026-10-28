@@ -9,7 +9,7 @@ exclusivamente para eventos de domínio entre microsserviços.
 - [~] 1/6 Infraestrutura/Gateway — código implementado; validar Dart e Docker localmente
 - [~] 2/6 Auth Service — endpoints implementados; testes Dart/Docker pendentes
 - [~] 3/6 Email Service — rotas, Google OAuth, Gmail e consumidor NATS implementados; falta validar execução
-- [ ] 4/6 Registration Service
+- [~] 4/6 Registration Service — implementado; validação Dart/CI e integração real pendentes
 - [ ] 5/6 Password Recovery Service
 - [ ] 6/6 Testes integrados e compatibilidade
 
@@ -75,3 +75,20 @@ Execute dart format . antes da verificação final.
 - Validar a criptografia com um token enc:v1: produzido pelo Node.
 - Validar idempotência, retentativas e desligamento dos consumidores no NATS.
 - Não usar em produção enquanto as etapas dependentes estiverem incompletas.
+
+
+## 4/6 — Registration Service
+
+- Endpoints de solicitação e confirmação compatíveis com Node.
+- Validação de e-mail, senha, confirmação e termos de uso.
+- HMAC com segredo separado para código determinístico; banco armazena apenas SHA-256.
+- Transação PostgreSQL com token pendente e outbox, sem segredos em eventos NATS.
+- HTTP interno entre Registration/Auth e Registration/Email.
+- Limites locais de 3 solicitações por e-mail e 10 por IP a cada 5 minutos.
+- Confirmação concorrente protegida por lock FOR UPDATE.
+- Publisher NATS opcional com evento requestId e ACK por evento.
+- Testes de contrato e uso único adicionados; validação real pendente.
+
+Observação: a configuração não ativa o envio de mensagens automaticamente
+porque o consumidor de Email permanece desabilitado por padrão. Para teste
+integrado, habilitar as flags de ambos os serviços com credenciais de teste.
