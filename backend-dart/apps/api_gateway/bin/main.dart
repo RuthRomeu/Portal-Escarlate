@@ -1,11 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:http/http.dart' as http;
-import 'package:portal_core/portal_core.dart';
 import 'package:api_gateway/api_gateway.dart';
-import 'package:portal_http/portal_http.dart';
-import 'package:shelf/shelf.dart';
+import 'package:portal_core/portal_core.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 
 const services = <String, int>{
@@ -24,47 +21,51 @@ Future<void> main() async {
   final targets = <String, Uri>{};
   for (final service in services.entries) {
     final key = service.key.toUpperCase().replaceAll('-', '_');
-    final env = Platform.environment['${key}_SERVICE_URL'];
-    targets[service.key] = Uri.parse(env ?? 'http://127.0.0.1:${service.value}');
+    final url = Platform.environment[key + '_SERVICE_URL'];
+    targets[service.key] = Uri.parse(
+        url ?? 'http://127.0.0.1:' + service.value.toString());
   }
-  final client = http.Client();
-  Future<Response> handler(Request request) async {
-    if (request.url.path == 'health/live') {
-      return jsonReply(200, {'status': 'ok', 'service': 'api-gateway'});
+
+  // Features not migrated to Dart keep running in the Node backend.
+  // An absent legacy URL must NOT accidentally route traffic to Dart stubs.
+  const legacyServices = ['news', 'ai', 'news-summary', 'article-summary'];
+  final legacyValue = Platform.environment['LEGACY_BACKEND_URL']?.trim();
+  if (legacyValue == null || legacyValue.isEmpty) {
+    for (final name in legacyServices) {
+      targets.remove(name);
     }
-    if (request.method == 'OPTIONS') {
-      return Response(204, headers: const {'allow': 'GET, POST, PUT, PATCH, DELETE, OPTIONS'});
+  } else {
+    final legacy = Uri.parse(legacyValue);
+    if (!(legacy.scheme == 'http' || legacy.scheme == 'https') ||
+        legacy.host.isEmpty || legacy.userInfo.isNotEmpty ||
+        legacy.pathSegments.where((segment) => segment.isNotEmpty).isNotEmpty ||
+        legacy.hasQuery || legacy.hasFragment) {
+      throw FormatException('LEGACY_BACKEND_URL deve ser uma origem HTTP(S).');
     }
-    final target = resolveUpstream(request, targets);
-    if (target == null) return jsonReply(404, {'error': 'unknown_route'});
-    if (config.internalToken == null || config.internalToken!.isEmpty) {
-      return jsonReply(503, {'error': 'gateway_not_configured'});
-    }
-    try {
-      final bytes = await request.read().fold<List<int>>([], (acc, chunk) => acc..addAll(chunk));
-      final upstream = http.Request(request.method, target)
-        ..followRedirects = false
-        ..bodyBytes = bytes;
-      for (final name in ['content-type', 'accept', 'cookie', 'authorization', 'x-request-id']) {
-        final value = request.headers[name];
-        if (value != null) upstream.headers[name] = value;
-      }
-      upstream.headers['x-internal-token'] = config.internalToken!;
-      final streamed = await client.send(upstream).timeout(const Duration(seconds: 15));
-      // Não seguir redirects do backend: repassar o status ao frontend.
-      final contentType = streamed.headers['content-type'];
-      final responseBody = await streamed.stream.toBytes();
-      return Response(streamed.statusCode, body: responseBody,
-        headers: {if (contentType != null) 'content-type': contentType});
-    } catch (error) {
-      stderr.writeln('[gateway] $error');
-      return jsonReply(502, {'error': 'service_unavailable'});
+    for (final name in legacyServices) {
+      targets[name] = legacy;
     }
   }
-  final pipeline = const Pipeline().addMiddleware(logRequests()).addHandler(handler);
-  final server = await shelf_io.serve(pipeline, config.host, config.port);
-  stdout.writeln('[gateway] listening on ${server.address.address}:${server.port}');
-  Future<void> shutdown() async { await server.close(force: true); client.close(); }
+
+  final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
+  final handler = buildGatewayHandler(
+    targets: targets,
+    internalToken: config.internalToken,
+    origins: gatewayOrigins(Platform.environment),
+    client: client,
+  );
+  final server = await shelf_io.serve(
+    handler,
+    config.host,
+    config.port,
+  );
+  stdout.writeln('[gateway] listening on ' +
+      server.address.address + ':' + server.port.toString());
+
+  Future<void> shutdown() async {
+    await server.close(force: true);
+    client.close(force: true);
+  }
   ProcessSignal.sigterm.watch().listen((_) => unawaited(shutdown()));
   ProcessSignal.sigint.watch().listen((_) => unawaited(shutdown()));
 }

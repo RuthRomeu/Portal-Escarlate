@@ -1,14 +1,14 @@
-# Camadas do serviço
+# Email Service Dart — etapa 3/6
 
-Apenas o `bin/main.dart` e o endpoint `/health/live` existem nesta etapa.
+- domain/: conexões e interfaces de persistência.
+- infrastructure/: PostgreSQL, AES-GCM enc:v1: e OAuth Google.
+- application/: envio MIME/Gmail e consumidor JetStream.
+- presentation/: HTTP administrativo com sessão admin.
 
-Ao adicionar regras de negócio, organizar dentro deste `lib/src/`:
+O gateway transmite requests por HTTP. O NATS somente distribui eventos.
+O consumidor exige requestId e resolve dados sensíveis por HTTP autenticado
+nos serviços de registro/recuperação. Essa parte está desabilitada até a
+implementação dos endpoints nas etapas 4 e 5.
 
-- `domain/`: entidades e contratos puros do domínio.
-- `application/`: casos de uso e orquestração.
-- `presentation/http/`: controladores e validação HTTP.
-- `infrastructure/database/`: repositórios PostgreSQL de propriedade deste serviço.
-- `infrastructure/external/`: adaptadores de APIs externas.
-- `infrastructure/events/`: eventos emitidos e consumidos.
-
-Não importar regras de negócio de outro microsserviço.
+O consumidor não garante exactly-once de ações externas. Para produção,
+realizar testes de falhas ambíguas da Gmail API e definir reconciliação.

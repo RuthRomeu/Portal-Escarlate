@@ -7,4 +7,3 @@ dependencies:
   portal_core: any
   portal_http: any
   shelf: ^1.4.3
-  http: ^1.6.0
