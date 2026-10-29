@@ -1,14 +1,29 @@
-# Camadas do serviço
+# Registration Service — etapa 4/6
 
-Apenas o `bin/main.dart` e o endpoint `/health/live` existem nesta etapa.
+Rotas públicas compatíveis com Node:
+- POST /api/auth/register/request
+- POST /api/auth/register
+- GET /api/auth/verify-email?code=...
 
-Ao adicionar regras de negócio, organizar dentro deste `lib/src/`:
+A comunicação síncrona com Auth usa HTTP interno autenticado.
+O link de confirmação é calculado via HMAC do requestId, usando
+REGISTRATION_TOKEN_SECRET; o banco persiste apenas o hash SHA-256 do código.
+Uma requisição guarda o cadastro pendente e um evento de outbox na mesma
+transação PostgreSQL. O NATS só recebe requestId, sem código, senha ou URL.
+O Email Service busca os dados sensíveis pelo endpoint HTTP:
+GET /internal/registration/email-requests/:requestId
 
-- `domain/`: entidades e contratos puros do domínio.
-- `application/`: casos de uso e orquestração.
-- `presentation/http/`: controladores e validação HTTP.
-- `infrastructure/database/`: repositórios PostgreSQL de propriedade deste serviço.
-- `infrastructure/external/`: adaptadores de APIs externas.
-- `infrastructure/events/`: eventos emitidos e consumidos.
+Um token só pode ser consumido após o Auth confirmar criação do usuário.
+Um lock FOR UPDATE serializa tentativas simultâneas. Caso a atualização
+no Auth tenha sucesso e a transação local falhe, a próxima tentativa pode
+reconciliar o estado via resposta de conflito + consulta ao Auth.
 
-Não importar regras de negócio de outro microsserviço.
+REGISTRATION_EVENTS_ENABLED=false por padrão. Para habilitar fluxo de e-mail
+em laboratório, ligar REGISTRATION_EVENTS_ENABLED e EMAIL_EVENTS_ENABLED.
+Para volumes PostgreSQL existentes, não apagar dados de produção.
+O controle de IP/e-mail é local em memória, ainda não distribuído.
+
+A outbox usa delivery at-least-once e deduplicação NATS por eventId.
+Limites conhecidos: eventos de um link revogado podem alcançar o consumidor
+e devem ser classificados como expirados/não entregáveis; testar reenvios,
+confirmações simultâneas e falhas entre Auth/PostgreSQL antes de produção.

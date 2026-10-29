@@ -1,0 +1,45 @@
+name: Dart backend checks
+
+on:
+  push:
+    branches:
+      - 'backend/dart-*'
+  pull_request:
+    paths:
+      - 'backend-dart/**'
+      - '.github/workflows/backend-dart.yml'
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend-dart
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: Resolve Dart workspace
+        run: dart pub get
+      - name: Prevent leaking reset codes in HTTP access logs
+        run: |
+          if grep -R 'logRequests()' apps/api_gateway packages/portal_http; then
+            echo 'Unsafe full-URL logging middleware detected'
+            exit 1
+          fi
+      - name: Analyze Dart source
+        run: dart analyze
+      - name: Execute Dart tests
+        run: dart test
+      - name: Validate Docker Compose
+        run: docker compose config --quiet
+      - name: Start PostgreSQL and NATS (isolated CI environment)
+        run: docker compose up -d --wait postgres nats
+      - name: Run real PostgreSQL + NATS integration flow
+        env:
+          RUN_DART_INTEGRATION: 'true'
+        run: dart test integration_test/backend_flow_test.dart --reporter expanded
+      - name: Shut down isolated CI services
+        if: always()
+        run: docker compose down -v

@@ -7,3 +7,4 @@ dependencies:
   shelf: ^1.4.3
   shelf_router: ^1.1.4
   portal_core: any
+  crypto: ^3.0.6
