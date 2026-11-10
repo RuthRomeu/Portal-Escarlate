@@ -92,15 +92,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
             validator: (value) => AuthValidators.confirm(value, _password.text),
           ),
           const SizedBox(height: 8),
-          CheckboxListTile(
-            key: const Key('register-terms'),
-            contentPadding: EdgeInsets.zero,
-            title: const Text(
-              'Aceito os termos de acesso e coleta de dados',
-              style: TextStyle(fontSize: 13),
+          Material(
+            type: MaterialType.transparency,
+            child: CheckboxListTile(
+              key: const Key('register-terms'),
+              contentPadding: EdgeInsets.zero,
+              title: const Text(
+                'Aceito os termos de acesso e coleta de dados',
+                style: TextStyle(fontSize: 13),
+              ),
+              value: _accepted,
+              onChanged: (value) => setState(() => _accepted = value ?? false),
             ),
-            value: _accepted,
-            onChanged: (value) => setState(() => _accepted = value ?? false),
           ),
           Align(
             alignment: Alignment.centerLeft,
