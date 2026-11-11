@@ -43,7 +43,7 @@ void main() {
     expect(passwordField.obscureText, isFalse);
   });
 
-  testWidgets('Submete tentativa de autenticação', (tester) async {
+  testWidgets('Não realiza autenticação real', (tester) async {
     await tester.pumpWidget(const PortalEscarlateApp());
 
     await tester.enterText(
@@ -57,10 +57,11 @@ void main() {
 
     await tester.ensureVisible(button);
     await tester.tap(button);
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    // Como o widget agora dispara requisição HTTP real no ambiente de teste,
-    // garantimos que o formulário foi enviado e o estado continua estável.
-    expect(find.byKey(const Key('enter-button')), findsOneWidget);
+    expect(
+      find.text('Demonstração: autenticação ainda não integrada.'),
+      findsOneWidget,
+    );
   });
 }

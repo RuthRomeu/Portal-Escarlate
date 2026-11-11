@@ -37,10 +37,7 @@ Future<HttpServer> runService({
       .addHandler(routes.call);
   final server = await shelf_io.serve(handler, config.host, config.port);
   stdout.writeln('[${config.name}] listening on ${server.address.address}:${server.port}');
-  // SIGTERM não é suportado no Windows — ignora silenciosamente.
-  if (!Platform.isWindows) {
-    ProcessSignal.sigterm.watch().listen((_) => server.close(force: true));
-  }
+  ProcessSignal.sigterm.watch().listen((_) => server.close(force: true));
   ProcessSignal.sigint.watch().listen((_) => server.close(force: true));
   return server;
 }
