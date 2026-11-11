@@ -9,9 +9,13 @@ import '../data/news_api_client.dart';
 /// Ao ser pressionado, abre a URL do artigo no browser externo
 /// usando [url_launcher].
 class NewsCard extends StatelessWidget {
-  const NewsCard({super.key, required this.article});
+  const NewsCard({super.key, required this.article, this.onSummarize});
 
   final NewsArticle article;
+
+  /// Callback acionado ao tocar em "Resumo com IA".
+  /// Se nulo, o botão não aparece.
+  final VoidCallback? onSummarize;
 
   Future<void> _open(BuildContext context) async {
     final url = Uri.tryParse(article.url);
@@ -19,10 +23,7 @@ class NewsCard extends StatelessWidget {
 
     // launchUrl com mode externo garante que o artigo abre no browser
     // do sistema, não dentro do app (o que exigiria permissão de WebView).
-    final launched = await launchUrl(
-      url,
-      mode: LaunchMode.externalApplication,
-    );
+    final launched = await launchUrl(url, mode: LaunchMode.externalApplication);
 
     if (!launched && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -54,7 +55,9 @@ class NewsCard extends StatelessWidget {
                   if (article.source != null) ...[
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: PortalColors.wine,
                         borderRadius: BorderRadius.circular(6),
@@ -126,6 +129,41 @@ class NewsCard extends StatelessWidget {
                   ),
                 ),
               ],
+              // Ações: resumo com IA + abrir artigo
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  if (onSummarize != null)
+                    TextButton.icon(
+                      onPressed: onSummarize,
+                      icon: const Icon(
+                        Icons.auto_awesome,
+                        color: PortalColors.gold,
+                        size: 14,
+                      ),
+                      label: const Text(
+                        'Resumo com IA',
+                        style: TextStyle(
+                          color: PortalColors.gold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: () => _open(context),
+                    icon: const Icon(
+                      Icons.open_in_new,
+                      color: PortalColors.muted,
+                      size: 14,
+                    ),
+                    label: const Text(
+                      'Abrir',
+                      style: TextStyle(color: PortalColors.muted, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -138,8 +176,19 @@ class NewsCard extends StatelessWidget {
     try {
       final dt = DateTime.parse(iso).toLocal();
       const months = [
-        '', 'jan', 'fev', 'mar', 'abr', 'mai', 'jun',
-        'jul', 'ago', 'set', 'out', 'nov', 'dez'
+        '',
+        'jan',
+        'fev',
+        'mar',
+        'abr',
+        'mai',
+        'jun',
+        'jul',
+        'ago',
+        'set',
+        'out',
+        'nov',
+        'dez',
       ];
       return '${dt.day} ${months[dt.month]} ${dt.year}';
     } on Exception {

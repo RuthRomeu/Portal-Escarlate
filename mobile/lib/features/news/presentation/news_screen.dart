@@ -1,8 +1,11 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/portal_theme.dart';
 import '../../auth/data/auth_api_client.dart';
 import '../data/news_api_client.dart';
+import '../../admin/presentation/admin_dashboard_screen.dart';
+import 'article_summary_screen.dart';
 import 'news_card.dart';
 
 /// Tela principal do Portal Escarlate após o login.
@@ -36,6 +39,22 @@ class _NewsScreenState extends State<NewsScreen> {
   String _lastQuery = '';
   int _totalResults = 0;
 
+  // Estado da síntese de página com IA
+  String _aiSummary = '';
+  String? _aiSummaryMarked;
+  bool _aiSummaryLoading = false;
+  String? _aiSummaryError;
+  int _summaryRequestId = 0;
+
+  // Keys dos cards para scroll ao tocar em um trecho da síntese
+  final Map<String, GlobalKey> _cardKeys = {};
+
+  // Histórico de busca do usuário (carregado do backend)
+  List<String> _searchHistory = [];
+
+  // Verifica se o usuário é admin (para mostrar o painel admin)
+  bool _isAdmin = false;
+
   @override
   void initState() {
     super.initState();
@@ -43,12 +62,26 @@ class _NewsScreenState extends State<NewsScreen> {
     // Internamente o AuthApiClient expõe o jar para que o NewsApiClient
     // possa enviar o cookie portal_session já salvo.
     _news = NewsApiClient(cookieJar: widget.apiClient.jar);
+    _loadSearchHistory();
+    _checkAdminRole();
   }
 
   @override
   void dispose() {
     _queryController.dispose();
     super.dispose();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Histórico de busca
+  // ---------------------------------------------------------------------------
+
+  Future<void> _loadSearchHistory() async {
+    final result = await _news.getSearchHistory();
+    if (!mounted) return;
+    if (result.ok) {
+      setState(() => _searchHistory = result.queries);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -70,14 +103,20 @@ class _NewsScreenState extends State<NewsScreen> {
     if (!mounted) return;
 
     if (result.ok) {
+      final withIds = attachShortIds(result.articles);
       setState(() {
-        _articles = result.articles;
+        _articles = withIds;
         _page = page;
         _lastQuery = query;
         _totalResults = result.totalResults;
         _hasMore = result.hasMore;
         _loading = false;
+        _aiSummary = '';
+        _aiSummaryMarked = null;
+        _aiSummaryError = null;
       });
+      _summarizePage();
+      _loadSearchHistory();
     } else {
       setState(() {
         _error = result.message;
@@ -91,6 +130,83 @@ class _NewsScreenState extends State<NewsScreen> {
     if (!mounted) return;
     // Volta para o login removendo toda a pilha de navegação.
     Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Síntese de página com IA
+  // ---------------------------------------------------------------------------
+
+  Future<void> _summarizePage() async {
+    if (_articles.isEmpty || _lastQuery.isEmpty) return;
+
+    final requestId = ++_summaryRequestId;
+
+    setState(() {
+      _aiSummaryLoading = true;
+      _aiSummary = '';
+      _aiSummaryMarked = null;
+      _aiSummaryError = null;
+    });
+
+    // Chama POST /api/news-summary com a query e os artigos da página atual.
+    final result = await _news.summarizePage(_lastQuery, _articles);
+
+    // Ignora respostas de buscas antigas (race condition entre páginas).
+    if (!mounted || requestId != _summaryRequestId) return;
+
+    setState(() {
+      _aiSummaryLoading = false;
+      if (result.ok) {
+        _aiSummary = result.summary;
+        _aiSummaryMarked = result.markedSummary;
+      } else {
+        _aiSummaryError = result.message;
+      }
+    });
+  }
+
+  void _scrollToArticle(String shortId) {
+    final key = _cardKeys[shortId];
+    if (key?.currentContext != null) {
+      Scrollable.ensureVisible(
+        key!.currentContext!,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+        alignment: 0.3,
+      );
+    }
+  }
+
+  GlobalKey _cardKeyFor(String? shortId) {
+    final id = shortId ?? '';
+    return _cardKeys.putIfAbsent(id, () => GlobalKey());
+  }
+
+  void _openArticleSummary(NewsArticle article) {
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            ArticleSummaryScreen(article: article, apiClient: _news),
+      ),
+    );
+  }
+
+  Future<void> _checkAdminRole() async {
+    final user = await widget.apiClient.me();
+    if (!mounted) return;
+    if (user != null && user.role == 'admin') {
+      setState(() => _isAdmin = true);
+    }
+  }
+
+  void _openAdminDashboard() {
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => AdminDashboardScreen(authApiClient: widget.apiClient),
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -120,6 +236,15 @@ class _NewsScreenState extends State<NewsScreen> {
           ],
         ),
         actions: [
+          if (_isAdmin)
+            IconButton(
+              onPressed: _openAdminDashboard,
+              icon: const Icon(
+                Icons.admin_panel_settings,
+                color: PortalColors.gold,
+              ),
+              tooltip: 'Painel admin',
+            ),
           TextButton.icon(
             onPressed: _logout,
             icon: const Icon(Icons.logout, color: PortalColors.muted, size: 18),
@@ -148,61 +273,118 @@ class _NewsScreenState extends State<NewsScreen> {
         color: PortalColors.darkWine,
         border: Border(bottom: BorderSide(color: PortalColors.border)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: TextFormField(
-              controller: _queryController,
-              textInputAction: TextInputAction.search,
-              onFieldSubmitted: (_) => _search(),
-              style: const TextStyle(color: PortalColors.text),
-              decoration: InputDecoration(
-                hintText: 'Buscar notícias…',
-                hintStyle: const TextStyle(color: PortalColors.muted),
-                filled: true,
-                fillColor: PortalColors.field,
-                prefixIcon: const Icon(
-                  Icons.search,
-                  color: PortalColors.muted,
-                  size: 20,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 12),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: PortalColors.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(
-                      color: PortalColors.gold, width: 1.4),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _queryController,
+                  textInputAction: TextInputAction.search,
+                  onFieldSubmitted: (_) => _search(),
+                  style: const TextStyle(color: PortalColors.text),
+                  decoration: InputDecoration(
+                    hintText: 'Buscar notícias…',
+                    hintStyle: const TextStyle(color: PortalColors.muted),
+                    filled: true,
+                    fillColor: PortalColors.field,
+                    prefixIcon: const Icon(
+                      Icons.search,
+                      color: PortalColors.muted,
+                      size: 20,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: PortalColors.border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(
+                        color: PortalColors.gold,
+                        width: 1.4,
+                      ),
+                    ),
+                  ),
                 ),
               ),
+              const SizedBox(width: 10),
+              SizedBox(
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: _loading ? null : () => _search(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: PortalColors.gold,
+                    foregroundColor: PortalColors.onGold,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: _loading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: PortalColors.onGold,
+                          ),
+                        )
+                      : const Text('Buscar'),
+                ),
+              ),
+            ],
+          ),
+          if (_searchHistory.isNotEmpty &&
+              _lastQuery.isEmpty &&
+              _articles.isEmpty)
+            _buildHistoryChips(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistoryChips() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Buscas recentes',
+            style: TextStyle(
+              color: PortalColors.muted,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(width: 10),
-          SizedBox(
-            height: 48,
-            child: ElevatedButton(
-              onPressed: _loading ? null : () => _search(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: PortalColors.gold,
-                foregroundColor: PortalColors.onGold,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _searchHistory.map((query) {
+              return ActionChip(
+                label: Text(
+                  query,
+                  style: const TextStyle(
+                    color: PortalColors.muted,
+                    fontSize: 12,
+                  ),
                 ),
-              ),
-              child: _loading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: PortalColors.onGold,
-                      ),
-                    )
-                  : const Text('Buscar'),
-            ),
+                backgroundColor: PortalColors.field,
+                side: const BorderSide(color: PortalColors.border),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                onPressed: () {
+                  _queryController.text = query;
+                  _search();
+                },
+              );
+            }).toList(),
           ),
         ],
       ),
@@ -225,13 +407,18 @@ class _NewsScreenState extends State<NewsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline,
-                  color: PortalColors.danger, size: 48),
+              const Icon(
+                Icons.error_outline,
+                color: PortalColors.danger,
+                size: 48,
+              ),
               const SizedBox(height: 16),
               Text(
                 _error!,
                 style: const TextStyle(
-                    color: PortalColors.danger, fontSize: 15),
+                  color: PortalColors.danger,
+                  fontSize: 15,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
@@ -255,8 +442,11 @@ class _NewsScreenState extends State<NewsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.newspaper_outlined,
-                color: PortalColors.muted, size: 64),
+            const Icon(
+              Icons.newspaper_outlined,
+              color: PortalColors.muted,
+              size: 64,
+            ),
             const SizedBox(height: 16),
             const Text(
               'Busque por um tema para ver notícias relevantes.',
@@ -287,25 +477,202 @@ class _NewsScreenState extends State<NewsScreen> {
                   child: Text(
                     '"$_lastQuery" — $_totalResults resultado${_totalResults != 1 ? 's' : ''}',
                     style: const TextStyle(
-                        color: PortalColors.muted, fontSize: 12),
+                      color: PortalColors.muted,
+                      fontSize: 12,
+                    ),
                   ),
                 ),
                 Text(
                   'Página $_page',
                   style: const TextStyle(
-                      color: PortalColors.muted, fontSize: 12),
+                    color: PortalColors.muted,
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
           ),
         Expanded(
-          child: ListView.builder(
-            itemCount: _articles.length,
-            itemBuilder: (context, index) =>
-                NewsCard(article: _articles[index]),
+          child: ListView(
+            children: [
+              // Síntese de página com IA
+              if (_aiSummaryLoading ||
+                  _aiSummary.isNotEmpty ||
+                  _aiSummaryError != null)
+                _buildAiSummary(),
+              // Cards de notícias com GlobalKey para scroll
+              for (final article in _articles)
+                NewsCard(
+                  key: _cardKeyFor(article.shortId),
+                  article: article,
+                  onSummarize: () => _openArticleSummary(article),
+                ),
+            ],
           ),
         ),
       ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Síntese de página com IA — widget
+  // ---------------------------------------------------------------------------
+
+  Widget _buildAiSummary() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: PortalColors.darkWine,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: PortalColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.auto_awesome,
+                color: PortalColors.gold,
+                size: 16,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Síntese da página',
+                style: TextStyle(
+                  color: PortalColors.gold,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_aiSummaryLoading)
+            Row(
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: PortalColors.gold,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Gerando síntese central das notícias…',
+                    style: const TextStyle(
+                      color: PortalColors.muted,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else if (_aiSummaryError != null)
+            Text(
+              _aiSummaryError!,
+              style: const TextStyle(color: PortalColors.danger, fontSize: 13),
+            )
+          else if (_aiSummary.isNotEmpty)
+            _buildSummaryText(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryText() {
+    final source = _aiSummaryMarked ?? _aiSummary;
+    if (source.isEmpty) return const SizedBox.shrink();
+
+    final paragraphs = source
+        .split('\n\n')
+        .where((p) => p.trim().isNotEmpty)
+        .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: paragraphs.map((paragraph) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: _buildParagraphRichText(paragraph),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildParagraphRichText(String paragraph) {
+    final marked = _aiSummaryMarked;
+    if (marked == null || marked.isEmpty) {
+      return Text(
+        paragraph.trim(),
+        style: const TextStyle(
+          color: PortalColors.text,
+          fontSize: 14,
+          height: 1.5,
+        ),
+      );
+    }
+
+    // Parser do formato [[texto]]((shortId))
+    final pattern = RegExp(r'\[\[([\s\S]+?)\]\]\(\(([^)]+)\)\)');
+    final spans = <TextSpan>[];
+    int cursor = 0;
+
+    for (final match in pattern.allMatches(paragraph)) {
+      if (match.start > cursor) {
+        spans.add(TextSpan(text: paragraph.substring(cursor, match.start)));
+      }
+
+      final text = match.group(1)?.trim() ?? '';
+      final shortId = match.group(2)?.trim() ?? '';
+
+      if (text.isNotEmpty && shortId.isNotEmpty) {
+        spans.add(
+          TextSpan(
+            text: text,
+            style: const TextStyle(
+              color: PortalColors.goldLight,
+              decoration: TextDecoration.underline,
+              decorationColor: PortalColors.goldDark,
+            ),
+            recognizer: TapGestureRecognizer()
+              ..onTap = () => _scrollToArticle(shortId),
+          ),
+        );
+      }
+
+      cursor = match.end;
+    }
+
+    if (cursor < paragraph.length) {
+      spans.add(TextSpan(text: paragraph.substring(cursor)));
+    }
+
+    if (spans.isEmpty) {
+      return Text(
+        paragraph.trim(),
+        style: const TextStyle(
+          color: PortalColors.text,
+          fontSize: 14,
+          height: 1.5,
+        ),
+      );
+    }
+
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(
+          color: PortalColors.text,
+          fontSize: 14,
+          height: 1.5,
+        ),
+        children: spans,
+      ),
     );
   }
 
