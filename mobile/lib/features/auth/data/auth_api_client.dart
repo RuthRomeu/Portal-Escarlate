@@ -303,4 +303,10 @@ class CookieJarClient {
     _saveCookie(response);
     return response;
   }
+
+  Future<http.Response> delete(Uri url, {Map<String, String>? headers}) async {
+    final response = await inner.delete(url, headers: _withCookie(headers));
+    _saveCookie(response);
+    return response;
+  }
 }
