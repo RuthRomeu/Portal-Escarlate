@@ -240,13 +240,103 @@ class SearchHistoryResult {
   final String? message;
 }
 
+/// Métrica de um tema de busca.
+class ThemeMetric {
+  const ThemeMetric({
+    required this.theme,
+    required this.totalSearches,
+    required this.uniqueUsers,
+  });
+
+  final String theme;
+  final int totalSearches;
+  final int uniqueUsers;
+
+  factory ThemeMetric.fromJson(Map<String, dynamic> json) => ThemeMetric(
+    theme: json['theme'] as String? ?? 'Sem tema',
+    totalSearches: json['totalSearches'] as int? ?? 0,
+    uniqueUsers: json['uniqueUsers'] as int? ?? 0,
+  );
+}
+
+/// Métrica de busca por usuário.
+class UserMetric {
+  const UserMetric({
+    required this.email,
+    required this.totalSearches,
+    required this.themes,
+  });
+
+  final String email;
+  final int totalSearches;
+  final List<ThemeMetric> themes;
+
+  factory UserMetric.fromJson(Map<String, dynamic> json) => UserMetric(
+    email: json['email'] as String? ?? '',
+    totalSearches: json['totalSearches'] as int? ?? 0,
+    themes:
+        (json['themes'] as List?)
+            ?.whereType<Map<String, dynamic>>()
+            .map(ThemeMetric.fromJson)
+            .toList() ??
+        [],
+  );
+}
+
+/// Métricas agregadas de notícias (admin).
+class NewsMetrics {
+  const NewsMetrics({
+    required this.totalSearches,
+    required this.themes,
+    required this.users,
+    this.generatedAt,
+  });
+
+  final int totalSearches;
+  final List<ThemeMetric> themes;
+  final List<UserMetric> users;
+  final String? generatedAt;
+
+  factory NewsMetrics.fromJson(Map<String, dynamic> json) => NewsMetrics(
+    totalSearches: json['totalSearches'] as int? ?? 0,
+    themes:
+        (json['themes'] as List?)
+            ?.whereType<Map<String, dynamic>>()
+            .map(ThemeMetric.fromJson)
+            .toList() ??
+        [],
+    users:
+        (json['users'] as List?)
+            ?.whereType<Map<String, dynamic>>()
+            .map(UserMetric.fromJson)
+            .toList() ??
+        [],
+    generatedAt: json['generatedAt'] as String?,
+  );
+}
+
+/// Resultado da busca de métricas.
+class NewsMetricsResult {
+  const NewsMetricsResult.success({required this.metrics})
+    : ok = true,
+      message = null;
+
+  const NewsMetricsResult.failure(this.message) : ok = false, metrics = null;
+
+  final bool ok;
+  final NewsMetrics? metrics;
+  final String? message;
+}
+
 /// Cliente HTTP para o News Service, roteado pelo gateway (porta 3000).
 ///
 /// Rotas utilizadas:
 /// - POST /api/news/search (busca paginada)
+/// - GET /api/news/search/history (histórico de busca)
 /// - POST /api/news-summary (síntese de página com IA)
 /// - POST /api/news/summarize (resumo individual de artigo)
 /// - GET /api/news/summaries/:id (busca resumo armazenado)
+/// - GET /api/news/metrics (métricas admin)
 ///
 /// Todas requerem autenticação (cookie portal_session).
 class NewsApiClient {
@@ -346,6 +436,44 @@ class NewsApiClient {
     } on Exception {
       return const SearchHistoryResult.failure(
         'Não foi possível carregar o histórico.',
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Métricas admin — GET /api/news/metrics
+  // ---------------------------------------------------------------------------
+
+  /// Carrega métricas agregadas de busca (apenas admin).
+  ///
+  /// Retorna total de buscas, temas mais pesquisados e atividade por usuário.
+  Future<NewsMetricsResult> getNewsMetrics() async {
+    try {
+      final response = await _jar.get(_uri('/api/news/metrics'));
+
+      if (response.statusCode == 401) {
+        return const NewsMetricsResult.failure(
+          'Sessão expirada. Faça login novamente.',
+        );
+      }
+
+      if (response.statusCode == 403) {
+        return const NewsMetricsResult.failure(
+          'Acesso restrito a administradores.',
+        );
+      }
+
+      if (response.statusCode != 200) {
+        return NewsMetricsResult.failure(
+          'Erro ao carregar métricas (HTTP ${response.statusCode}).',
+        );
+      }
+
+      final body = _parseBody(response);
+      return NewsMetricsResult.success(metrics: NewsMetrics.fromJson(body));
+    } on Exception {
+      return const NewsMetricsResult.failure(
+        'Não foi possível conectar ao servidor.',
       );
     }
   }

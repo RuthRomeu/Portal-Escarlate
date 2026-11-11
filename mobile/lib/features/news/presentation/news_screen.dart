@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/portal_theme.dart';
 import '../../auth/data/auth_api_client.dart';
 import '../data/news_api_client.dart';
+import '../../admin/presentation/admin_dashboard_screen.dart';
 import 'article_summary_screen.dart';
 import 'news_card.dart';
 
@@ -51,6 +52,9 @@ class _NewsScreenState extends State<NewsScreen> {
   // Histórico de busca do usuário (carregado do backend)
   List<String> _searchHistory = [];
 
+  // Verifica se o usuário é admin (para mostrar o painel admin)
+  bool _isAdmin = false;
+
   @override
   void initState() {
     super.initState();
@@ -59,6 +63,7 @@ class _NewsScreenState extends State<NewsScreen> {
     // possa enviar o cookie portal_session já salvo.
     _news = NewsApiClient(cookieJar: widget.apiClient.jar);
     _loadSearchHistory();
+    _checkAdminRole();
   }
 
   @override
@@ -187,6 +192,23 @@ class _NewsScreenState extends State<NewsScreen> {
     );
   }
 
+  Future<void> _checkAdminRole() async {
+    final user = await widget.apiClient.me();
+    if (!mounted) return;
+    if (user != null && user.role == 'admin') {
+      setState(() => _isAdmin = true);
+    }
+  }
+
+  void _openAdminDashboard() {
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => AdminDashboardScreen(authApiClient: widget.apiClient),
+      ),
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // UI
   // ---------------------------------------------------------------------------
@@ -214,6 +236,15 @@ class _NewsScreenState extends State<NewsScreen> {
           ],
         ),
         actions: [
+          if (_isAdmin)
+            IconButton(
+              onPressed: _openAdminDashboard,
+              icon: const Icon(
+                Icons.admin_panel_settings,
+                color: PortalColors.gold,
+              ),
+              tooltip: 'Painel admin',
+            ),
           TextButton.icon(
             onPressed: _logout,
             icon: const Icon(Icons.logout, color: PortalColors.muted, size: 18),
