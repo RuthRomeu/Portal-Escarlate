@@ -90,7 +90,12 @@ class AuthApiClient {
       final response = await _jar.post(
         _uri('/api/auth/register'),
         headers: {'content-type': 'application/json'},
-        body: jsonEncode({'email': email.trim(), 'password': password}),
+        body: jsonEncode({
+          'email': email.trim(),
+          'password': password,
+          'confirmPassword': password,
+          'terms': true,
+        }),
       );
       final body = _parseBody(response);
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -145,7 +150,7 @@ class AuthApiClient {
           '/api/auth/password/reset?code=${Uri.encodeQueryComponent(token)}',
         ),
         headers: {'content-type': 'application/json'},
-        body: jsonEncode({'password': password}),
+        body: jsonEncode({'password': password, 'confirmPassword': password}),
       );
       final body = _parseBody(response);
       if (response.statusCode == 200) return AuthResult.success(body);
@@ -269,6 +274,10 @@ class CookieJarClient {
     if (_sessionCookie != null) {
       result['cookie'] = 'portal_session=$_sessionCookie';
     }
+    // Clientes nativos (Android/iOS) não enviam Origin automaticamente.
+    // O gateway Node.js rejeita mutações sem Origin/Referer conhecido.
+    // Enviamos a origem do gateway para que a requisição seja aceita.
+    result['origin'] = ApiConfig.baseUrl;
     return result;
   }
 
