@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/portal_theme.dart';
@@ -36,6 +37,16 @@ class _NewsScreenState extends State<NewsScreen> {
   String _lastQuery = '';
   int _totalResults = 0;
 
+  // Estado da síntese de página com IA
+  String _aiSummary = '';
+  String? _aiSummaryMarked;
+  bool _aiSummaryLoading = false;
+  String? _aiSummaryError;
+  int _summaryRequestId = 0;
+
+  // Keys dos cards para scroll ao tocar em um trecho da síntese
+  final Map<String, GlobalKey> _cardKeys = {};
+
   @override
   void initState() {
     super.initState();
@@ -70,14 +81,19 @@ class _NewsScreenState extends State<NewsScreen> {
     if (!mounted) return;
 
     if (result.ok) {
+      final withIds = attachShortIds(result.articles);
       setState(() {
-        _articles = result.articles;
+        _articles = withIds;
         _page = page;
         _lastQuery = query;
         _totalResults = result.totalResults;
         _hasMore = result.hasMore;
         _loading = false;
+        _aiSummary = '';
+        _aiSummaryMarked = null;
+        _aiSummaryError = null;
       });
+      _summarizePage();
     } else {
       setState(() {
         _error = result.message;
@@ -91,6 +107,56 @@ class _NewsScreenState extends State<NewsScreen> {
     if (!mounted) return;
     // Volta para o login removendo toda a pilha de navegação.
     Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Síntese de página com IA
+  // ---------------------------------------------------------------------------
+
+  Future<void> _summarizePage() async {
+    if (_articles.isEmpty || _lastQuery.isEmpty) return;
+
+    final requestId = ++_summaryRequestId;
+
+    setState(() {
+      _aiSummaryLoading = true;
+      _aiSummary = '';
+      _aiSummaryMarked = null;
+      _aiSummaryError = null;
+    });
+
+    // Chama POST /api/news-summary com a query e os artigos da página atual.
+    final result = await _news.summarizePage(_lastQuery, _articles);
+
+    // Ignora respostas de buscas antigas (race condition entre páginas).
+    if (!mounted || requestId != _summaryRequestId) return;
+
+    setState(() {
+      _aiSummaryLoading = false;
+      if (result.ok) {
+        _aiSummary = result.summary;
+        _aiSummaryMarked = result.markedSummary;
+      } else {
+        _aiSummaryError = result.message;
+      }
+    });
+  }
+
+  void _scrollToArticle(String shortId) {
+    final key = _cardKeys[shortId];
+    if (key?.currentContext != null) {
+      Scrollable.ensureVisible(
+        key!.currentContext!,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+        alignment: 0.3,
+      );
+    }
+  }
+
+  GlobalKey _cardKeyFor(String? shortId) {
+    final id = shortId ?? '';
+    return _cardKeys.putIfAbsent(id, () => GlobalKey());
   }
 
   // ---------------------------------------------------------------------------
@@ -167,7 +233,9 @@ class _NewsScreenState extends State<NewsScreen> {
                   size: 20,
                 ),
                 contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 12),
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: const BorderSide(color: PortalColors.border),
@@ -175,7 +243,9 @@ class _NewsScreenState extends State<NewsScreen> {
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: const BorderSide(
-                      color: PortalColors.gold, width: 1.4),
+                    color: PortalColors.gold,
+                    width: 1.4,
+                  ),
                 ),
               ),
             ),
@@ -225,13 +295,18 @@ class _NewsScreenState extends State<NewsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline,
-                  color: PortalColors.danger, size: 48),
+              const Icon(
+                Icons.error_outline,
+                color: PortalColors.danger,
+                size: 48,
+              ),
               const SizedBox(height: 16),
               Text(
                 _error!,
                 style: const TextStyle(
-                    color: PortalColors.danger, fontSize: 15),
+                  color: PortalColors.danger,
+                  fontSize: 15,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
@@ -255,8 +330,11 @@ class _NewsScreenState extends State<NewsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.newspaper_outlined,
-                color: PortalColors.muted, size: 64),
+            const Icon(
+              Icons.newspaper_outlined,
+              color: PortalColors.muted,
+              size: 64,
+            ),
             const SizedBox(height: 16),
             const Text(
               'Busque por um tema para ver notícias relevantes.',
@@ -287,25 +365,198 @@ class _NewsScreenState extends State<NewsScreen> {
                   child: Text(
                     '"$_lastQuery" — $_totalResults resultado${_totalResults != 1 ? 's' : ''}',
                     style: const TextStyle(
-                        color: PortalColors.muted, fontSize: 12),
+                      color: PortalColors.muted,
+                      fontSize: 12,
+                    ),
                   ),
                 ),
                 Text(
                   'Página $_page',
                   style: const TextStyle(
-                      color: PortalColors.muted, fontSize: 12),
+                    color: PortalColors.muted,
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
           ),
         Expanded(
-          child: ListView.builder(
-            itemCount: _articles.length,
-            itemBuilder: (context, index) =>
-                NewsCard(article: _articles[index]),
+          child: ListView(
+            children: [
+              // Síntese de página com IA
+              if (_aiSummaryLoading ||
+                  _aiSummary.isNotEmpty ||
+                  _aiSummaryError != null)
+                _buildAiSummary(),
+              // Cards de notícias com GlobalKey para scroll
+              for (final article in _articles)
+                NewsCard(key: _cardKeyFor(article.shortId), article: article),
+            ],
           ),
         ),
       ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Síntese de página com IA — widget
+  // ---------------------------------------------------------------------------
+
+  Widget _buildAiSummary() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: PortalColors.darkWine,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: PortalColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.auto_awesome,
+                color: PortalColors.gold,
+                size: 16,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Síntese da página',
+                style: TextStyle(
+                  color: PortalColors.gold,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (_aiSummaryLoading)
+            Row(
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: PortalColors.gold,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Gerando síntese central das notícias…',
+                    style: const TextStyle(
+                      color: PortalColors.muted,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else if (_aiSummaryError != null)
+            Text(
+              _aiSummaryError!,
+              style: const TextStyle(color: PortalColors.danger, fontSize: 13),
+            )
+          else if (_aiSummary.isNotEmpty)
+            _buildSummaryText(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryText() {
+    final source = _aiSummaryMarked ?? _aiSummary;
+    if (source.isEmpty) return const SizedBox.shrink();
+
+    final paragraphs = source
+        .split('\n\n')
+        .where((p) => p.trim().isNotEmpty)
+        .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: paragraphs.map((paragraph) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: _buildParagraphRichText(paragraph),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildParagraphRichText(String paragraph) {
+    final marked = _aiSummaryMarked;
+    if (marked == null || marked.isEmpty) {
+      return Text(
+        paragraph.trim(),
+        style: const TextStyle(
+          color: PortalColors.text,
+          fontSize: 14,
+          height: 1.5,
+        ),
+      );
+    }
+
+    // Parser do formato [[texto]]((shortId))
+    final pattern = RegExp(r'\[\[([\s\S]+?)\]\]\(\(([^)]+)\)\)');
+    final spans = <TextSpan>[];
+    int cursor = 0;
+
+    for (final match in pattern.allMatches(paragraph)) {
+      if (match.start > cursor) {
+        spans.add(TextSpan(text: paragraph.substring(cursor, match.start)));
+      }
+
+      final text = match.group(1)?.trim() ?? '';
+      final shortId = match.group(2)?.trim() ?? '';
+
+      if (text.isNotEmpty && shortId.isNotEmpty) {
+        spans.add(
+          TextSpan(
+            text: text,
+            style: const TextStyle(
+              color: PortalColors.goldLight,
+              decoration: TextDecoration.underline,
+              decorationColor: PortalColors.goldDark,
+            ),
+            recognizer: TapGestureRecognizer()
+              ..onTap = () => _scrollToArticle(shortId),
+          ),
+        );
+      }
+
+      cursor = match.end;
+    }
+
+    if (cursor < paragraph.length) {
+      spans.add(TextSpan(text: paragraph.substring(cursor)));
+    }
+
+    if (spans.isEmpty) {
+      return Text(
+        paragraph.trim(),
+        style: const TextStyle(
+          color: PortalColors.text,
+          fontSize: 14,
+          height: 1.5,
+        ),
+      );
+    }
+
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(
+          color: PortalColors.text,
+          fontSize: 14,
+          height: 1.5,
+        ),
+        children: spans,
+      ),
     );
   }
 
