@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/portal_theme.dart';
 import '../auth_progress.dart';
-import '../data/auth_api_client.dart';
-import '../../news/presentation/news_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -14,56 +12,34 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _api = AuthApiClient();
 
   bool _obscurePassword = true;
-  bool _loading = false;
 
   String _message =
       'Informe suas credenciais para acessar sua área de pesquisa.';
 
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
+  void _showUnavailable(String feature) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: PortalColors.wine,
+        content: Text(
+          '$feature estará disponível em uma futura versão.',
+          style: const TextStyle(color: PortalColors.text),
+        ),
+      ),
+    );
   }
 
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    FocusScope.of(context).unfocus();
-
-    setState(() {
-      _loading = true;
-      _message = 'Autenticando…';
-    });
-
-    // Chama POST /api/auth/login no gateway (porta 3000).
-    // O AuthApiClient envia { email, password } e salva o cookie
-    // portal_session que o backend retorna no Set-Cookie.
-    final result = await _api.login(
-      _emailController.text,
-      _passwordController.text,
-    );
-
-    if (!mounted) return;
-
-    if (result.ok) {
-      // Login bem-sucedido: navega para a tela de notícias.
-      // pushReplacement impede que o usuário volte para o login
-      // com o botão físico "voltar".
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute<void>(builder: (_) => NewsScreen(apiClient: _api)),
-      );
+  void _submit() {
+    if (!_formKey.currentState!.validate()) {
       return;
     }
 
+    FocusScope.of(context).unfocus();
+
     setState(() {
-      _loading = false;
-      _message = result.message ?? 'Não foi possível autenticar.';
+      _message = 'Demonstração: autenticação ainda não integrada.';
     });
   }
 
@@ -444,7 +420,6 @@ class _LoginScreenState extends State<LoginScreen> {
           const SizedBox(height: 8),
           TextFormField(
             key: const Key('email-field'),
-            controller: _emailController,
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.next,
             autofillHints: const [AutofillHints.username],
@@ -471,7 +446,6 @@ class _LoginScreenState extends State<LoginScreen> {
           const SizedBox(height: 8),
           TextFormField(
             key: const Key('password-field'),
-            controller: _passwordController,
             obscureText: _obscurePassword,
             keyboardType: TextInputType.visiblePassword,
             textInputAction: TextInputAction.done,
@@ -507,8 +481,7 @@ class _LoginScreenState extends State<LoginScreen> {
             runSpacing: 4,
             children: [
               TextButton(
-                onPressed: () =>
-                    Navigator.pushNamed(context, '/forgot-password'),
+                onPressed: () => Navigator.pushNamed(context, '/forgot-password'),
                 child: const Text('Esqueci minha senha'),
               ),
               TextButton(
@@ -543,7 +516,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               child: ElevatedButton(
                 key: const Key('enter-button'),
-                onPressed: _loading ? null : _submit,
+                onPressed: _submit,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.transparent,
                   shadowColor: Colors.transparent,
@@ -552,22 +525,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     borderRadius: BorderRadius.circular(13),
                   ),
                 ),
-                child: _loading
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: PortalColors.onGold,
-                        ),
-                      )
-                    : const Text(
-                        'ENTRAR NO PORTAL',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.3,
-                        ),
-                      ),
+                child: const Text(
+                  'ENTRAR NO PORTAL',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.3,
+                  ),
+                ),
               ),
             ),
           ),
