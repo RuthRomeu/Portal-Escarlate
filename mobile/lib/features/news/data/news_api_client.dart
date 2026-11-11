@@ -225,6 +225,21 @@ class ArticleSummaryFetchResult {
   final String? message;
 }
 
+/// Resultado da busca de histórico de pesquisas.
+class SearchHistoryResult {
+  const SearchHistoryResult.success({required this.queries})
+    : ok = true,
+      message = null;
+
+  const SearchHistoryResult.failure(this.message)
+    : ok = false,
+      queries = const [];
+
+  final bool ok;
+  final List<String> queries;
+  final String? message;
+}
+
 /// Cliente HTTP para o News Service, roteado pelo gateway (porta 3000).
 ///
 /// Rotas utilizadas:
@@ -290,6 +305,47 @@ class NewsApiClient {
     } on Exception {
       return const NewsResult.failure(
         'Não foi possível conectar ao servidor. Verifique sua conexão.',
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Histórico de busca — GET /api/news/search/history
+  // ---------------------------------------------------------------------------
+
+  /// Carrega as 10 buscas mais recentes do usuário.
+  ///
+  /// O News Service mantém o histórico de busca por usuário (e-mail).
+  /// Retorna uma lista simples de strings com as queries mais recentes.
+  Future<SearchHistoryResult> getSearchHistory() async {
+    try {
+      final response = await _jar.get(_uri('/api/news/search/history'));
+
+      if (response.statusCode == 401) {
+        return const SearchHistoryResult.failure(
+          'Sessão expirada. Faça login novamente.',
+        );
+      }
+
+      if (response.statusCode != 200) {
+        return SearchHistoryResult.failure(
+          'Erro ao carregar o histórico (HTTP ${response.statusCode}).',
+        );
+      }
+
+      final body = _parseBody(response);
+      final rawQueries = body['queries'];
+      final queries = rawQueries is List
+          ? rawQueries
+                .whereType<String>()
+                .where((q) => q.trim().isNotEmpty)
+                .toList()
+          : <String>[];
+
+      return SearchHistoryResult.success(queries: queries);
+    } on Exception {
+      return const SearchHistoryResult.failure(
+        'Não foi possível carregar o histórico.',
       );
     }
   }
