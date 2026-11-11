@@ -48,6 +48,9 @@ class _NewsScreenState extends State<NewsScreen> {
   // Keys dos cards para scroll ao tocar em um trecho da síntese
   final Map<String, GlobalKey> _cardKeys = {};
 
+  // Histórico de busca do usuário (carregado do backend)
+  List<String> _searchHistory = [];
+
   @override
   void initState() {
     super.initState();
@@ -55,12 +58,25 @@ class _NewsScreenState extends State<NewsScreen> {
     // Internamente o AuthApiClient expõe o jar para que o NewsApiClient
     // possa enviar o cookie portal_session já salvo.
     _news = NewsApiClient(cookieJar: widget.apiClient.jar);
+    _loadSearchHistory();
   }
 
   @override
   void dispose() {
     _queryController.dispose();
     super.dispose();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Histórico de busca
+  // ---------------------------------------------------------------------------
+
+  Future<void> _loadSearchHistory() async {
+    final result = await _news.getSearchHistory();
+    if (!mounted) return;
+    if (result.ok) {
+      setState(() => _searchHistory = result.queries);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -95,6 +111,7 @@ class _NewsScreenState extends State<NewsScreen> {
         _aiSummaryError = null;
       });
       _summarizePage();
+      _loadSearchHistory();
     } else {
       setState(() {
         _error = result.message;
@@ -225,65 +242,118 @@ class _NewsScreenState extends State<NewsScreen> {
         color: PortalColors.darkWine,
         border: Border(bottom: BorderSide(color: PortalColors.border)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: TextFormField(
-              controller: _queryController,
-              textInputAction: TextInputAction.search,
-              onFieldSubmitted: (_) => _search(),
-              style: const TextStyle(color: PortalColors.text),
-              decoration: InputDecoration(
-                hintText: 'Buscar notícias…',
-                hintStyle: const TextStyle(color: PortalColors.muted),
-                filled: true,
-                fillColor: PortalColors.field,
-                prefixIcon: const Icon(
-                  Icons.search,
-                  color: PortalColors.muted,
-                  size: 20,
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: PortalColors.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(
-                    color: PortalColors.gold,
-                    width: 1.4,
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _queryController,
+                  textInputAction: TextInputAction.search,
+                  onFieldSubmitted: (_) => _search(),
+                  style: const TextStyle(color: PortalColors.text),
+                  decoration: InputDecoration(
+                    hintText: 'Buscar notícias…',
+                    hintStyle: const TextStyle(color: PortalColors.muted),
+                    filled: true,
+                    fillColor: PortalColors.field,
+                    prefixIcon: const Icon(
+                      Icons.search,
+                      color: PortalColors.muted,
+                      size: 20,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: PortalColors.border),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(
+                        color: PortalColors.gold,
+                        width: 1.4,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          SizedBox(
-            height: 48,
-            child: ElevatedButton(
-              onPressed: _loading ? null : () => _search(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: PortalColors.gold,
-                foregroundColor: PortalColors.onGold,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+              const SizedBox(width: 10),
+              SizedBox(
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: _loading ? null : () => _search(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: PortalColors.gold,
+                    foregroundColor: PortalColors.onGold,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: _loading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: PortalColors.onGold,
+                          ),
+                        )
+                      : const Text('Buscar'),
                 ),
               ),
-              child: _loading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: PortalColors.onGold,
-                      ),
-                    )
-                  : const Text('Buscar'),
+            ],
+          ),
+          if (_searchHistory.isNotEmpty &&
+              _lastQuery.isEmpty &&
+              _articles.isEmpty)
+            _buildHistoryChips(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHistoryChips() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Buscas recentes',
+            style: TextStyle(
+              color: PortalColors.muted,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
             ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _searchHistory.map((query) {
+              return ActionChip(
+                label: Text(
+                  query,
+                  style: const TextStyle(
+                    color: PortalColors.muted,
+                    fontSize: 12,
+                  ),
+                ),
+                backgroundColor: PortalColors.field,
+                side: const BorderSide(color: PortalColors.border),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                onPressed: () {
+                  _queryController.text = query;
+                  _search();
+                },
+              );
+            }).toList(),
           ),
         ],
       ),
