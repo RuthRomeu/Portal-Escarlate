@@ -309,4 +309,18 @@ class CookieJarClient {
     _saveCookie(response);
     return response;
   }
+
+  Future<http.Response> patch(
+    Uri url, {
+    Map<String, String>? headers,
+    Object? body,
+  }) async {
+    final response = await inner.patch(
+      url,
+      headers: _withCookie(headers),
+      body: body,
+    );
+    _saveCookie(response);
+    return response;
+  }
 }

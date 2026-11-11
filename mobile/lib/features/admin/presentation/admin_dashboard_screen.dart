@@ -35,6 +35,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   String? _connectionsError;
   bool _oauthLoading = false;
 
+  // ID da conexão cuja prioridade está sendo atualizada (null = nenhuma)
+  String? _updatingPriorityId;
+
   @override
   void initState() {
     super.initState();
@@ -96,15 +99,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Future<void> _deleteConnection(String id) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed =
+        await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
             backgroundColor: PortalColors.darkWine,
-            title: const Text('Remover conexão?',
-                style: TextStyle(color: PortalColors.text)),
+            title: const Text(
+              'Remover conexão?',
+              style: TextStyle(color: PortalColors.text),
+            ),
             content: const Text(
-                'A conexão de e-mail será removida permanentemente.',
-                style: TextStyle(color: PortalColors.muted)),
+              'A conexão de e-mail será removida permanentemente.',
+              style: TextStyle(color: PortalColors.muted),
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
@@ -112,8 +119,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Remover',
-                    style: TextStyle(color: PortalColors.danger)),
+                child: const Text(
+                  'Remover',
+                  style: TextStyle(color: PortalColors.danger),
+                ),
               ),
             ],
           ),
@@ -133,6 +142,79 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Não foi possível remover a conexão.')),
       );
+    }
+  }
+
+  Future<void> _updatePriority(String id, int priority) async {
+    setState(() => _updatingPriorityId = id);
+
+    final success = await _admin.updateConnectionPriority(id, priority);
+
+    if (!mounted) return;
+    setState(() => _updatingPriorityId = null);
+
+    if (success) {
+      _loadConnections();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Não foi possível atualizar a prioridade.'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _editPriority(EmailConnection conn) async {
+    final controller = TextEditingController(text: conn.priority.toString());
+
+    final result = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: PortalColors.darkWine,
+        title: const Text(
+          'Editar prioridade',
+          style: TextStyle(color: PortalColors.text, fontSize: 16),
+        ),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          style: const TextStyle(color: PortalColors.text),
+          decoration: const InputDecoration(
+            labelText: 'Prioridade (mínimo 1)',
+            labelStyle: TextStyle(color: PortalColors.muted),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: PortalColors.border),
+            ),
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: PortalColors.gold),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () {
+              final value = int.tryParse(controller.text);
+              if (value != null && value >= 1) {
+                Navigator.pop(context, value);
+              }
+            },
+            child: const Text(
+              'Salvar',
+              style: TextStyle(color: PortalColors.gold),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+
+    if (result != null && result != conn.priority) {
+      await _updatePriority(conn.id, result);
     }
   }
 
@@ -172,10 +254,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ),
         ),
         body: TabBarView(
-          children: [
-            _buildMetricsTab(),
-            _buildConnectionsTab(),
-          ],
+          children: [_buildMetricsTab(), _buildConnectionsTab()],
         ),
       ),
     );
@@ -199,12 +278,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline,
-                  color: PortalColors.danger, size: 48),
+              const Icon(
+                Icons.error_outline,
+                color: PortalColors.danger,
+                size: 48,
+              ),
               const SizedBox(height: 16),
-              Text(_metricsError!,
-                  style: const TextStyle(color: PortalColors.danger),
-                  textAlign: TextAlign.center),
+              Text(
+                _metricsError!,
+                style: const TextStyle(color: PortalColors.danger),
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 20),
               ElevatedButton.icon(
                 onPressed: () {
@@ -233,18 +317,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.bar_chart_outlined,
-                color: PortalColors.muted, size: 48),
+            const Icon(
+              Icons.bar_chart_outlined,
+              color: PortalColors.muted,
+              size: 48,
+            ),
             const SizedBox(height: 16),
-            const Text('Nenhuma métrica disponível ainda.',
-                style: TextStyle(color: PortalColors.muted)),
+            const Text(
+              'Nenhuma métrica disponível ainda.',
+              style: TextStyle(color: PortalColors.muted),
+            ),
           ],
         ),
       );
     }
 
-    final maxSearches =
-        m.themes.fold<int>(0, (max, t) => t.totalSearches > max ? t.totalSearches : max);
+    final maxSearches = m.themes.fold<int>(
+      0,
+      (max, t) => t.totalSearches > max ? t.totalSearches : max,
+    );
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -265,16 +356,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Total de buscas',
-                        style:
-                            TextStyle(color: PortalColors.muted, fontSize: 12)),
+                    const Text(
+                      'Total de buscas',
+                      style: TextStyle(color: PortalColors.muted, fontSize: 12),
+                    ),
                     const SizedBox(height: 4),
-                    Text('${m.totalSearches}',
-                        style: const TextStyle(
-                          color: PortalColors.goldLight,
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                        )),
+                    Text(
+                      '${m.totalSearches}',
+                      style: const TextStyle(
+                        color: PortalColors.goldLight,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -283,23 +377,27 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ),
         const SizedBox(height: 20),
         // Label
-        const Text('Temas mais buscados',
-            style: TextStyle(
-              color: PortalColors.gold,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            )),
+        const Text(
+          'Temas mais buscados',
+          style: TextStyle(
+            color: PortalColors.gold,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         const SizedBox(height: 12),
         // Barras de temas
         ...m.themes.map((t) => _buildThemeBar(t, maxSearches)),
         if (m.users.isNotEmpty) ...[
           const SizedBox(height: 24),
-          const Text('Atividade por usuário',
-              style: TextStyle(
-                color: PortalColors.gold,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              )),
+          const Text(
+            'Atividade por usuário',
+            style: TextStyle(
+              color: PortalColors.gold,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 12),
           ...m.users.map(_buildUserRow),
         ],
@@ -308,8 +406,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _buildThemeBar(ThemeMetric theme, int maxSearches) {
-    final fraction =
-        maxSearches > 0 ? (theme.totalSearches / maxSearches).clamp(0.04, 1.0) : 0.0;
+    final fraction = maxSearches > 0
+        ? (theme.totalSearches / maxSearches).clamp(0.04, 1.0)
+        : 0.0;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -322,15 +421,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               Expanded(
                 child: Text(
                   theme.theme,
-                  style: const TextStyle(color: PortalColors.text, fontSize: 13),
+                  style: const TextStyle(
+                    color: PortalColors.text,
+                    fontSize: 13,
+                  ),
                 ),
               ),
               Text(
                 '${theme.totalSearches}',
                 style: const TextStyle(
-                    color: PortalColors.goldLight,
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold),
+                  color: PortalColors.goldLight,
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ],
           ),
@@ -364,8 +467,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          const Icon(Icons.person_outline,
-              color: PortalColors.muted, size: 16),
+          const Icon(Icons.person_outline, color: PortalColors.muted, size: 16),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -400,12 +502,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline,
-                  color: PortalColors.danger, size: 48),
+              const Icon(
+                Icons.error_outline,
+                color: PortalColors.danger,
+                size: 48,
+              ),
               const SizedBox(height: 16),
-              Text(_connectionsError!,
-                  style: const TextStyle(color: PortalColors.danger),
-                  textAlign: TextAlign.center),
+              Text(
+                _connectionsError!,
+                style: const TextStyle(color: PortalColors.danger),
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 20),
               ElevatedButton.icon(
                 onPressed: () {
@@ -442,7 +549,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2, color: PortalColors.onGold),
+                      strokeWidth: 2,
+                      color: PortalColors.onGold,
+                    ),
                   )
                 : const Icon(Icons.add_link, size: 20),
             label: const Text('Conectar conta Google'),
@@ -459,8 +568,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               padding: const EdgeInsets.only(top: 32),
               child: Column(
                 children: [
-                  const Icon(Icons.mail_outline,
-                      color: PortalColors.muted, size: 48),
+                  const Icon(
+                    Icons.mail_outline,
+                    color: PortalColors.muted,
+                    size: 48,
+                  ),
                   const SizedBox(height: 16),
                   const Text(
                     'Nenhuma conexão de e-mail cadastrada.',
@@ -472,12 +584,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
           )
         else ...[
-          const Text('Conexões ativas',
-              style: TextStyle(
-                color: PortalColors.gold,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              )),
+          const Text(
+            'Conexões ativas',
+            style: TextStyle(
+              color: PortalColors.gold,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 12),
           ..._connections.map(_buildConnectionCard),
         ],
@@ -515,8 +629,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             Row(
               children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: PortalColors.wine,
                     borderRadius: BorderRadius.circular(6),
@@ -533,8 +649,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: PortalColors.field,
                     borderRadius: BorderRadius.circular(6),
@@ -546,18 +664,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                 ),
                 const Spacer(),
-                Text('Prioridade: ${conn.priority}',
-                    style: const TextStyle(
-                        color: PortalColors.muted, fontSize: 11)),
+                Text(
+                  'Prioridade: ${conn.priority}',
+                  style: const TextStyle(
+                    color: PortalColors.muted,
+                    fontSize: 11,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 10),
             Text(
               conn.email,
               style: const TextStyle(
-                  color: PortalColors.text,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600),
+                color: PortalColors.text,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
@@ -565,15 +688,48 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               style: const TextStyle(color: PortalColors.muted, fontSize: 12),
             ),
             const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: () => _deleteConnection(conn.id),
-                icon: const Icon(Icons.delete_outline,
-                    color: PortalColors.danger, size: 16),
-                label: const Text('Remover',
-                    style: TextStyle(color: PortalColors.danger, fontSize: 13)),
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (_updatingPriorityId == conn.id)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 12),
+                    child: SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        color: PortalColors.gold,
+                      ),
+                    ),
+                  ),
+                TextButton.icon(
+                  onPressed: _updatingPriorityId == conn.id
+                      ? null
+                      : () => _editPriority(conn),
+                  icon: const Icon(
+                    Icons.edit_outlined,
+                    color: PortalColors.muted,
+                    size: 16,
+                  ),
+                  label: const Text(
+                    'Editar',
+                    style: TextStyle(color: PortalColors.muted, fontSize: 13),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => _deleteConnection(conn.id),
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    color: PortalColors.danger,
+                    size: 16,
+                  ),
+                  label: const Text(
+                    'Remover',
+                    style: TextStyle(color: PortalColors.danger, fontSize: 13),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
