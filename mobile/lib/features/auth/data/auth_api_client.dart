@@ -134,12 +134,18 @@ class AuthApiClient {
   // ---------------------------------------------------------------------------
 
   /// Redefine a senha usando o token recebido por e-mail.
+  ///
+  /// O Password Recovery Service espera o código como parâmetro de URL
+  /// (?code=...) e a nova senha no corpo JSON, conforme o contrato do
+  /// backend Node.js (services/password-recovery/server.js).
   Future<AuthResult> resetPassword(String token, String password) async {
     try {
       final response = await _jar.post(
-        _uri('/api/auth/password/reset'),
+        _uri(
+          '/api/auth/password/reset?code=${Uri.encodeQueryComponent(token)}',
+        ),
         headers: {'content-type': 'application/json'},
-        body: jsonEncode({'token': token, 'password': password}),
+        body: jsonEncode({'password': password}),
       );
       final body = _parseBody(response);
       if (response.statusCode == 200) return AuthResult.success(body);
@@ -185,6 +191,29 @@ class AuthApiClient {
       return AuthUser.fromJson(user);
     } on Exception {
       return null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Verificação de e-mail — GET /api/auth/verify-email
+  // ---------------------------------------------------------------------------
+
+  /// Confirma o cadastro usando o código recebido por e-mail.
+  ///
+  /// O Registration Service valida o token e cria a conta do usuário.
+  /// Em caso de sucesso, o usuário já pode fazer login normalmente.
+  Future<AuthResult> verifyEmail(String code) async {
+    try {
+      final response = await _jar.get(
+        _uri('/api/auth/verify-email?code=${Uri.encodeQueryComponent(code)}'),
+      );
+      final body = _parseBody(response);
+      if (response.statusCode == 200) return AuthResult.success(body);
+      return AuthResult.failure(_extractMessage(body, response.statusCode));
+    } on Exception {
+      return const AuthResult.failure(
+        'Não foi possível conectar ao servidor. Verifique sua conexão.',
+      );
     }
   }
 

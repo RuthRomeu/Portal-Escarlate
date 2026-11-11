@@ -1,17 +1,34 @@
 # Etapas de autenticação Flutter — 6/6
 
-Implementadas: **6** · Restantes: **0**
+Implementadas: **6** · Restantes: **0** · Integradas ao backend: **6/6**
 
-- [x] 1. Login
-- [x] 2. Cadastro
-- [x] 3. Termos de uso
-- [x] 4. Esqueci minha senha
-- [x] 5. Redefinição de senha
-- [x] 6. Verificação de e-mail
+- [x] 1. Login — `POST /api/auth/login`
+- [x] 2. Cadastro — `POST /api/auth/register`
+- [x] 3. Termos de uso — tela estática (sem chamada de backend)
+- [x] 4. Esqueci minha senha — `POST /api/auth/password/forgot`
+- [x] 5. Redefinição de senha — `POST /api/auth/password/reset?code=...`
+- [x] 6. Verificação de e-mail — `GET /api/auth/verify-email?code=...`
 
-## Escopo e limitações
+## Escopo e integração
 
-As seis interfaces têm navegação, visual consistente, validação local e indicadores de progresso para debug. Cadastro, autenticação, envio de links, redefinição de senha e verificação de tokens **não executam chamadas de backend**. Links de prévia aparecem apenas em modo debug. Deep links Android/iOS exigirão configuração adicional quando houver integração real.
+As seis interfaces têm navegação, visual consistente, validação local e
+indicadores de carregamento. Todas as telas que exigem comunicação com o
+backend estão integradas via `AuthApiClient` (`auth_api_client.dart`), que
+gerencia o cookie de sessão `portal_session` através do `CookieJarClient`.
+
+O contrato HTTP segue exatamente o backend Node.js:
+- **Login**: envia `{ email, password }`, recebe `Set-Cookie` com a sessão.
+- **Cadastro**: envia `{ email, password }` para iniciar a verificação por e-mail.
+- **Esqueci a senha**: envia `{ email }`; o backend responde 200 mesmo se o
+  e-mail não existir (não revela cadastros).
+- **Redefinição de senha**: envia o código como query param `?code=...` e a
+  nova senha no corpo JSON `{ password }`.
+- **Verificação de e-mail**: GET com o código como query param `?code=...`.
+
+Deep links Android/iOS (abrir o app a partir do link no e-mail) exigem
+configuração adicional de intent filters (Android) e universal links (iOS).
+Atualmente as rotas `/reset-password?code=...` e `/verify-email?code=...`
+funcionam via `onGenerateRoute` no `main.dart`.
 
 ## Histórico Git reutilizável
 
