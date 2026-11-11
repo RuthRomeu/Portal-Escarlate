@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/portal_theme.dart';
 import '../../auth/data/auth_api_client.dart';
 import '../data/news_api_client.dart';
+import 'article_summary_screen.dart';
 import 'news_card.dart';
 
 /// Tela principal do Portal Escarlate após o login.
@@ -157,6 +158,16 @@ class _NewsScreenState extends State<NewsScreen> {
   GlobalKey _cardKeyFor(String? shortId) {
     final id = shortId ?? '';
     return _cardKeys.putIfAbsent(id, () => GlobalKey());
+  }
+
+  void _openArticleSummary(NewsArticle article) {
+    Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            ArticleSummaryScreen(article: article, apiClient: _news),
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -390,7 +401,11 @@ class _NewsScreenState extends State<NewsScreen> {
                 _buildAiSummary(),
               // Cards de notícias com GlobalKey para scroll
               for (final article in _articles)
-                NewsCard(key: _cardKeyFor(article.shortId), article: article),
+                NewsCard(
+                  key: _cardKeyFor(article.shortId),
+                  article: article,
+                  onSummarize: () => _openArticleSummary(article),
+                ),
             ],
           ),
         ),

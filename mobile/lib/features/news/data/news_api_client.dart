@@ -148,13 +148,92 @@ class NewsSummaryResult {
   final String? message;
 }
 
+/// Resumo de um artigo individual gerado por IA.
+///
+/// O Article Summary Service extrai o conteúdo da URL do artigo,
+/// envia para a IA (OpenRouter) e armazena o resultado no banco.
+/// O resumo pode ser recuperado pelo [id] (UUID).
+class ArticleSummary {
+  const ArticleSummary({
+    required this.id,
+    required this.title,
+    required this.summary,
+    this.author,
+    this.source,
+    this.publishedAt,
+    this.urlToImage,
+    this.url,
+    this.provider,
+    this.model,
+    this.createdAt,
+  });
+
+  final String id;
+  final String title;
+  final String summary;
+  final String? author;
+  final String? source;
+  final String? publishedAt;
+  final String? urlToImage;
+  final String? url;
+  final String? provider;
+  final String? model;
+  final String? createdAt;
+
+  factory ArticleSummary.fromJson(Map<String, dynamic> json) => ArticleSummary(
+    id: json['id'] as String? ?? '',
+    title: json['title'] as String? ?? 'Sem título',
+    summary: json['summary'] as String? ?? '',
+    author: json['author'] as String?,
+    source: json['source'] as String?,
+    publishedAt: json['publishedAt'] as String?,
+    urlToImage: json['urlToImage'] as String?,
+    url: json['url'] as String?,
+    provider: json['provider'] as String?,
+    model: json['model'] as String?,
+    createdAt: json['createdAt'] as String?,
+  );
+}
+
+/// Resultado da solicitação de resumo (POST /api/news/summarize).
+class ArticleSummaryRequestResult {
+  const ArticleSummaryRequestResult.success({required this.summaryId})
+    : ok = true,
+      message = null;
+
+  const ArticleSummaryRequestResult.failure(this.message)
+    : ok = false,
+      summaryId = null;
+
+  final bool ok;
+  final String? summaryId;
+  final String? message;
+}
+
+/// Resultado da busca de resumo (GET /api/news/summaries/:id).
+class ArticleSummaryFetchResult {
+  const ArticleSummaryFetchResult.success({required this.summary})
+    : ok = true,
+      message = null;
+
+  const ArticleSummaryFetchResult.failure(this.message)
+    : ok = false,
+      summary = null;
+
+  final bool ok;
+  final ArticleSummary? summary;
+  final String? message;
+}
+
 /// Cliente HTTP para o News Service, roteado pelo gateway (porta 3000).
 ///
 /// Rotas utilizadas:
 /// - POST /api/news/search (busca paginada)
 /// - POST /api/news-summary (síntese de página com IA)
+/// - POST /api/news/summarize (resumo individual de artigo)
+/// - GET /api/news/summaries/:id (busca resumo armazenado)
 ///
-/// Ambas requerem autenticação (cookie portal_session).
+/// Todas requerem autenticação (cookie portal_session).
 class NewsApiClient {
   /// Recebe o [CookieJarClient] já autenticado do [AuthApiClient]
   /// para reutilizar o cookie de sessão — não abrimos uma nova conexão.
@@ -284,6 +363,103 @@ class NewsApiClient {
     } on Exception {
       return const NewsSummaryResult.failure(
         'Serviço de IA indisponível para resumir esta página.',
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Resumo individual de artigo — POST /api/news/summarize
+  // ---------------------------------------------------------------------------
+
+  /// Solicita um resumo individual de artigo via IA.
+  ///
+  /// O Article Summary Service extrai o conteúdo da URL do artigo,
+  /// envia para a IA (OpenRouter) e retorna { summaryId }.
+  Future<ArticleSummaryRequestResult> summarizeArticle(
+    NewsArticle article,
+  ) async {
+    try {
+      final response = await _jar.post(
+        _uri('/api/news/summarize'),
+        headers: {'content-type': 'application/json'},
+        body: jsonEncode({
+          'title': article.title,
+          'url': article.url,
+          'author': article.author ?? '',
+          'urlToImage': article.urlToImage ?? '',
+          'description': article.description,
+          'source': article.source ?? '',
+          'publishedAt': article.publishedAt ?? '',
+        }),
+      );
+
+      if (response.statusCode == 401) {
+        return const ArticleSummaryRequestResult.failure(
+          'Sessão expirada. Faça login novamente.',
+        );
+      }
+
+      final body = _parseBody(response);
+      if (response.statusCode == 200) {
+        final summaryId = body['summaryId'] as String?;
+        if (summaryId != null && summaryId.isNotEmpty) {
+          return ArticleSummaryRequestResult.success(summaryId: summaryId);
+        }
+        return const ArticleSummaryRequestResult.failure(
+          'Resumo gerado, mas o ID não foi retornado.',
+        );
+      }
+
+      final msg = body['message'];
+      return ArticleSummaryRequestResult.failure(
+        msg is String && msg.isNotEmpty
+            ? msg
+            : 'Não foi possível gerar o resumo (HTTP ${response.statusCode}).',
+      );
+    } on Exception {
+      return const ArticleSummaryRequestResult.failure(
+        'Não foi possível conectar ao servidor. Verifique sua conexão.',
+      );
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Busca de resumo armazenado — GET /api/news/summaries/:id
+  // ---------------------------------------------------------------------------
+
+  /// Busca um resumo de artigo pelo seu ID (UUID).
+  ///
+  /// O Article Summary Service retorna o resumo completo armazenado
+  /// no banco, com título, texto, fonte, autor e metadados da IA.
+  Future<ArticleSummaryFetchResult> getArticleSummary(String id) async {
+    try {
+      final response = await _jar.get(_uri('/api/news/summaries/$id'));
+
+      if (response.statusCode == 401) {
+        return const ArticleSummaryFetchResult.failure(
+          'Sessão expirada. Faça login novamente.',
+        );
+      }
+
+      if (response.statusCode == 404) {
+        return const ArticleSummaryFetchResult.failure(
+          'Resumo não encontrado.',
+        );
+      }
+
+      if (response.statusCode != 200) {
+        return ArticleSummaryFetchResult.failure(
+          'Erro ao carregar o resumo (HTTP ${response.statusCode}).',
+        );
+      }
+
+      final body = _parseBody(response);
+      return ArticleSummaryFetchResult.success(
+        summary: ArticleSummary.fromJson(body),
+      );
+    } on Exception {
+      return const ArticleSummaryFetchResult.failure(
+        'Não foi possível conectar ao servidor. Verifique sua conexão.',
       );
     }
   }
