@@ -60,12 +60,12 @@ class EmailConnection {
 /// Resultado da lista de conexões de e-mail.
 class EmailConnectionsResult {
   const EmailConnectionsResult.success({required this.connections})
-      : ok = true,
-        message = null;
+    : ok = true,
+      message = null;
 
   const EmailConnectionsResult.failure(this.message)
-      : ok = false,
-        connections = const [];
+    : ok = false,
+      connections = const [];
 
   final bool ok;
   final List<EmailConnection> connections;
@@ -75,12 +75,10 @@ class EmailConnectionsResult {
 /// Resultado da solicitação de OAuth do Google.
 class GoogleOAuthResult {
   const GoogleOAuthResult.success({required this.url})
-      : ok = true,
-        message = null;
+    : ok = true,
+      message = null;
 
-  const GoogleOAuthResult.failure(this.message)
-      : ok = false,
-        url = null;
+  const GoogleOAuthResult.failure(this.message) : ok = false, url = null;
 
   final bool ok;
   final String? url;
@@ -107,32 +105,36 @@ class AdminApiClient {
 
       if (response.statusCode == 401) {
         return const EmailConnectionsResult.failure(
-            'Sessão expirada. Faça login novamente.');
+          'Sessão expirada. Faça login novamente.',
+        );
       }
 
       if (response.statusCode == 403) {
         return const EmailConnectionsResult.failure(
-            'Acesso restrito a administradores.');
+          'Acesso restrito a administradores.',
+        );
       }
 
       if (response.statusCode != 200) {
         return EmailConnectionsResult.failure(
-            'Erro ao carregar conexões (HTTP ${response.statusCode}).');
+          'Erro ao carregar conexões (HTTP ${response.statusCode}).',
+        );
       }
 
       final body = _parseBody(response);
       final rawConnections = body['connections'];
       final connections = rawConnections is List
           ? rawConnections
-              .whereType<Map<String, dynamic>>()
-              .map(EmailConnection.fromJson)
-              .toList()
+                .whereType<Map<String, dynamic>>()
+                .map(EmailConnection.fromJson)
+                .toList()
           : <EmailConnection>[];
 
       return EmailConnectionsResult.success(connections: connections);
     } on Exception {
       return const EmailConnectionsResult.failure(
-          'Não foi possível conectar ao servidor. Verifique sua conexão.');
+        'Não foi possível conectar ao servidor. Verifique sua conexão.',
+      );
     }
   }
 
@@ -149,7 +151,8 @@ class AdminApiClient {
         final body = _parseBody(response);
         final msg = body['message'];
         return GoogleOAuthResult.failure(
-            msg is String && msg.isNotEmpty ? msg : 'Erro ao iniciar OAuth.');
+          msg is String && msg.isNotEmpty ? msg : 'Erro ao iniciar OAuth.',
+        );
       }
 
       final body = _parseBody(response);
@@ -162,7 +165,8 @@ class AdminApiClient {
       return const GoogleOAuthResult.failure('URL de OAuth não retornada.');
     } on Exception {
       return const GoogleOAuthResult.failure(
-          'Não foi possível conectar ao servidor.');
+        'Não foi possível conectar ao servidor.',
+      );
     }
   }
 
@@ -171,6 +175,20 @@ class AdminApiClient {
     try {
       final response = await _jar.delete(_uri('/api/email-connections/$id'));
       return response.statusCode == 204 || response.statusCode == 200;
+    } on Exception {
+      return false;
+    }
+  }
+
+  /// Atualiza a prioridade de uma conexão (PATCH /api/email-connections/:id/priority).
+  Future<bool> updateConnectionPriority(String id, int priority) async {
+    try {
+      final response = await _jar.patch(
+        _uri('/api/email-connections/$id/priority'),
+        headers: {'content-type': 'application/json'},
+        body: jsonEncode({'priority': priority}),
+      );
+      return response.statusCode == 200;
     } on Exception {
       return false;
     }
