@@ -31,7 +31,12 @@ export function verifyInternalRequest(request) {
     return false
   }
 
-  return safeEqual(request.headers['x-internal-service-token'], expected)
+  // O gateway Dart envia x-internal-token; o Node.js usa x-internal-service-token.
+  // Aceitamos ambos para compatibilidade híbrida.
+  return (
+    safeEqual(request.headers['x-internal-service-token'], expected) ||
+    safeEqual(request.headers['x-internal-token'], expected)
+  )
 }
 
 export function validateInternalRequest(request, response, json) {
@@ -82,6 +87,12 @@ export function isStateChangingMethod(method) {
 
 export function isAllowedRequestOrigin(request) {
   if (!isStateChangingMethod(request.method)) {
+    return true
+  }
+
+  // Requisições internas com token válido (ex: gateway Dart → gateway Node.js)
+  // são permitidas sem verificação de Origin.
+  if (verifyInternalRequest(request)) {
     return true
   }
 

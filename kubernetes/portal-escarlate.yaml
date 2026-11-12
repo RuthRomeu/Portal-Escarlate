@@ -1,46 +1,199 @@
+# Manifesto Kubernetes — Portal Escarlate
+# Testado com Minikube.
+#
+# Pré-requisitos:
+#   minikube start --driver=docker
+#   kubectl create secret generic portal-escarlate-env --from-file=.env=.env
+#
+# Build e carga das imagens:
+#   docker build -t portal-escarlate-node:latest .
+#   docker build -t portal-escarlate-dart:latest --build-arg APP=api_gateway ./backend-dart
+#   docker build -t portal-escarlate-dart-auth:latest --build-arg APP=auth_service ./backend-dart
+#   docker build -t portal-escarlate-dart-registration:latest --build-arg APP=registration_service ./backend-dart
+#   docker build -t portal-escarlate-dart-recovery:latest --build-arg APP=password_recovery_service ./backend-dart
+#   docker build -t portal-escarlate-dart-email:latest --build-arg APP=email_service ./backend-dart
+#   minikube image load portal-escarlate-node:latest
+#   minikube image load portal-escarlate-dart:latest
+#   (repetir para cada imagem Dart)
+#
+# Aplicar:
+#   kubectl apply -f kubernetes/portal-escarlate.yaml
+#
+# Acessar:
+#   minikube service dart-gateway --url   → gateway Dart (3100)
+#   minikube service node-gateway --url   → gateway Node.js (3000)
+#   minikube service frontend --url       → frontend web (5173)
+
+# =============================================================================
+# INFRAESTRUTURA
+# =============================================================================
+
+---
+# PostgreSQL — banco único com múltiplos schemas
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: portal-escarlate
+  name: postgres
 spec:
   replicas: 1
-
   selector:
     matchLabels:
-      app: portal-escarlate
-
+      app: postgres
   template:
     metadata:
       labels:
-        app: portal-escarlate
-
+        app: postgres
     spec:
       containers:
-        - name: portal-escarlate
-          image: portal-escarlate:dev
+        - name: postgres
+          image: postgres:17-alpine
           imagePullPolicy: IfNotPresent
-
           ports:
-            - containerPort: 5173
-
+            - containerPort: 5432
           env:
-            - name: FRONTEND_HOST
-              value: "0.0.0.0"
-
-            - name: FRONTEND_PORT
-              value: "5173"
-
-            - name: VITE_API_URL
-              value: "http://127.0.0.1:3000"
-
+            - name: POSTGRES_USER
+              value: "portal"
+            - name: POSTGRES_DB
+              value: "portal_escarlate"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portal-escarlate-env
+                  key: PORTAL_DB_PASSWORD
+                  optional: true
           volumeMounts:
-            - name: portal-escarlate-env
+            - name: postgres-init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+            - name: pg-data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "portal", "-d", "portal_escarlate"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 20
+      volumes:
+        - name: postgres-init
+          configMap:
+            name: postgres-init-scripts
+        - name: pg-data
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
+
+---
+# ConfigMap com os scripts SQL de inicialização
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-scripts
+data:
+  01-dart-init.sql: |
+    CREATE DATABASE auth_db;
+    CREATE DATABASE registration_db;
+    CREATE DATABASE password_recovery_db;
+    CREATE DATABASE email_db;
+
+---
+# NATS JetStream — barramento de eventos para o Dart
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nats
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nats
+  template:
+    metadata:
+      labels:
+        app: nats
+    spec:
+      containers:
+        - name: nats
+          image: nats:2.12-alpine
+          imagePullPolicy: IfNotPresent
+          args: ["--jetstream"]
+          ports:
+            - containerPort: 4222
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nats
+spec:
+  selector:
+    app: nats
+  ports:
+    - port: 4222
+      targetPort: 4222
+
+# =============================================================================
+# BACKEND NODE.JS
+# =============================================================================
+
+---
+# Event Service (barramento)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-events
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-events
+  template:
+    metadata:
+      labels:
+        app: node-events
+    spec:
+      containers:
+        - name: node-events
+          image: portal-escarlate-node:latest
+          imagePullPolicy: IfNotPresent
+          command: ["node", "--env-file=.env", "backend/src/services/events/server.js"]
+          env:
+            - name: EVENT_SERVICE_PORT
+              value: "3007"
+            - name: HOST
+              value: "0.0.0.0"
+            - name: AUTH_SERVICE_URL
+              value: "http://node-auth:3001"
+            - name: REGISTRATION_SERVICE_URL
+              value: "http://node-registration:3003"
+            - name: PASSWORD_RECOVERY_SERVICE_URL
+              value: "http://node-password-recovery:3009"
+            - name: EMAIL_SERVICE_URL
+              value: "http://node-email:3006"
+            - name: NEWS_SERVICE_URL
+              value: "http://node-news:3002"
+            - name: AI_SERVICE_URL
+              value: "http://node-ai:3004"
+            - name: NEWS_SUMMARY_SERVICE_URL
+              value: "http://node-news-summary:3005"
+            - name: ARTICLE_SUMMARY_SERVICE_URL
+              value: "http://node-article-summary:3008"
+          volumeMounts:
+            - name: env-file
               mountPath: /app/.env
               subPath: .env
               readOnly: true
-
       volumes:
-        - name: portal-escarlate-env
+        - name: env-file
           secret:
             secretName: portal-escarlate-env
 
@@ -48,16 +201,907 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: portal-escarlate
+  name: node-events
+spec:
+  selector:
+    app: node-events
+  ports:
+    - port: 3007
+      targetPort: 3007
 
+---
+# Auth Service Node.js
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-auth
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-auth
+  template:
+    metadata:
+      labels:
+        app: node-auth
+    spec:
+      containers:
+        - name: node-auth
+          image: portal-escarlate-node:latest
+          imagePullPolicy: IfNotPresent
+          command: ["node", "--env-file=.env", "backend/src/services/auth/server.js"]
+          env:
+            - name: AUTH_SERVICE_PORT
+              value: "3001"
+            - name: HOST
+              value: "0.0.0.0"
+            - name: AUTH_DATABASE_URL
+              value: "postgresql://portal:$(PORTAL_DB_PASSWORD)@postgres:5432/portal_escarlate?sslmode=disable"
+            - name: EVENT_SERVICE_URL
+              value: "http://node-events:3007"
+            - name: PORTAL_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portal-escarlate-env
+                  key: PORTAL_DB_PASSWORD
+                  optional: true
+          volumeMounts:
+            - name: env-file
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+      volumes:
+        - name: env-file
+          secret:
+            secretName: portal-escarlate-env
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-auth
+spec:
+  selector:
+    app: node-auth
+  ports:
+    - port: 3001
+      targetPort: 3001
+
+---
+# News Service Node.js
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-news
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-news
+  template:
+    metadata:
+      labels:
+        app: node-news
+    spec:
+      containers:
+        - name: node-news
+          image: portal-escarlate-node:latest
+          imagePullPolicy: IfNotPresent
+          command: ["node", "--env-file=.env", "backend/src/services/news/server.js"]
+          env:
+            - name: NEWS_SERVICE_PORT
+              value: "3002"
+            - name: HOST
+              value: "0.0.0.0"
+            - name: NEWS_DATABASE_URL
+              value: "postgresql://portal:$(PORTAL_DB_PASSWORD)@postgres:5432/portal_escarlate?sslmode=disable"
+            - name: EVENT_SERVICE_URL
+              value: "http://node-events:3007"
+            - name: AI_SERVICE_URL
+              value: "http://node-ai:3004"
+            - name: PORTAL_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portal-escarlate-env
+                  key: PORTAL_DB_PASSWORD
+                  optional: true
+          volumeMounts:
+            - name: env-file
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+      volumes:
+        - name: env-file
+          secret:
+            secretName: portal-escarlate-env
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-news
+spec:
+  selector:
+    app: node-news
+  ports:
+    - port: 3002
+      targetPort: 3002
+
+---
+# AI Service Node.js
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-ai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-ai
+  template:
+    metadata:
+      labels:
+        app: node-ai
+    spec:
+      containers:
+        - name: node-ai
+          image: portal-escarlate-node:latest
+          imagePullPolicy: IfNotPresent
+          command: ["node", "--env-file=.env", "backend/src/services/ai/server.js"]
+          env:
+            - name: AI_SERVICE_PORT
+              value: "3004"
+            - name: HOST
+              value: "0.0.0.0"
+            - name: AI_SERVICE_DATABASE_URL
+              value: "postgresql://portal:$(PORTAL_DB_PASSWORD)@postgres:5432/portal_escarlate?sslmode=disable"
+            - name: EVENT_SERVICE_URL
+              value: "http://node-events:3007"
+            - name: PORTAL_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portal-escarlate-env
+                  key: PORTAL_DB_PASSWORD
+                  optional: true
+          volumeMounts:
+            - name: env-file
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+      volumes:
+        - name: env-file
+          secret:
+            secretName: portal-escarlate-env
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-ai
+spec:
+  selector:
+    app: node-ai
+  ports:
+    - port: 3004
+      targetPort: 3004
+
+---
+# News Summary Service Node.js
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-news-summary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-news-summary
+  template:
+    metadata:
+      labels:
+        app: node-news-summary
+    spec:
+      containers:
+        - name: node-news-summary
+          image: portal-escarlate-node:latest
+          imagePullPolicy: IfNotPresent
+          command: ["node", "--env-file=.env", "backend/src/services/news-summary/server.js"]
+          env:
+            - name: NEWS_SUMMARY_SERVICE_PORT
+              value: "3005"
+            - name: HOST
+              value: "0.0.0.0"
+            - name: EVENT_SERVICE_URL
+              value: "http://node-events:3007"
+            - name: AI_SERVICE_URL
+              value: "http://node-ai:3004"
+          volumeMounts:
+            - name: env-file
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+      volumes:
+        - name: env-file
+          secret:
+            secretName: portal-escarlate-env
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-news-summary
+spec:
+  selector:
+    app: node-news-summary
+  ports:
+    - port: 3005
+      targetPort: 3005
+
+---
+# Article Summary Service Node.js
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-article-summary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-article-summary
+  template:
+    metadata:
+      labels:
+        app: node-article-summary
+    spec:
+      containers:
+        - name: node-article-summary
+          image: portal-escarlate-node:latest
+          imagePullPolicy: IfNotPresent
+          command: ["node", "--env-file=.env", "backend/src/services/article-summary/server.js"]
+          env:
+            - name: ARTICLE_SUMMARY_SERVICE_PORT
+              value: "3008"
+            - name: HOST
+              value: "0.0.0.0"
+            - name: ARTICLE_SUMMARY_DATABASE_URL
+              value: "postgresql://portal:$(PORTAL_DB_PASSWORD)@postgres:5432/portal_escarlate?sslmode=disable"
+            - name: EVENT_SERVICE_URL
+              value: "http://node-events:3007"
+            - name: AI_SERVICE_URL
+              value: "http://node-ai:3004"
+            - name: PORTAL_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portal-escarlate-env
+                  key: PORTAL_DB_PASSWORD
+                  optional: true
+          volumeMounts:
+            - name: env-file
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+      volumes:
+        - name: env-file
+          secret:
+            secretName: portal-escarlate-env
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-article-summary
+spec:
+  selector:
+    app: node-article-summary
+  ports:
+    - port: 3008
+      targetPort: 3008
+
+---
+# Registration Service Node.js
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-registration
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-registration
+  template:
+    metadata:
+      labels:
+        app: node-registration
+    spec:
+      containers:
+        - name: node-registration
+          image: portal-escarlate-node:latest
+          imagePullPolicy: IfNotPresent
+          command: ["node", "--env-file=.env", "backend/src/services/registration/server.js"]
+          env:
+            - name: REGISTRATION_SERVICE_PORT
+              value: "3003"
+            - name: HOST
+              value: "0.0.0.0"
+            - name: REGISTRATION_DATABASE_URL
+              value: "postgresql://portal:$(PORTAL_DB_PASSWORD)@postgres:5432/portal_escarlate?sslmode=disable"
+            - name: AUTH_SERVICE_URL
+              value: "http://node-auth:3001"
+            - name: EVENT_SERVICE_URL
+              value: "http://node-events:3007"
+            - name: PORTAL_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portal-escarlate-env
+                  key: PORTAL_DB_PASSWORD
+                  optional: true
+          volumeMounts:
+            - name: env-file
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+      volumes:
+        - name: env-file
+          secret:
+            secretName: portal-escarlate-env
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-registration
+spec:
+  selector:
+    app: node-registration
+  ports:
+    - port: 3003
+      targetPort: 3003
+
+---
+# Password Recovery Service Node.js
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-password-recovery
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-password-recovery
+  template:
+    metadata:
+      labels:
+        app: node-password-recovery
+    spec:
+      containers:
+        - name: node-password-recovery
+          image: portal-escarlate-node:latest
+          imagePullPolicy: IfNotPresent
+          command: ["node", "--env-file=.env", "backend/src/services/password-recovery/server.js"]
+          env:
+            - name: PASSWORD_RECOVERY_SERVICE_PORT
+              value: "3009"
+            - name: HOST
+              value: "0.0.0.0"
+            - name: PASSWORD_RECOVERY_DATABASE_URL
+              value: "postgresql://portal:$(PORTAL_DB_PASSWORD)@postgres:5432/portal_escarlate?sslmode=disable"
+            - name: AUTH_SERVICE_URL
+              value: "http://node-auth:3001"
+            - name: EVENT_SERVICE_URL
+              value: "http://node-events:3007"
+            - name: PORTAL_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portal-escarlate-env
+                  key: PORTAL_DB_PASSWORD
+                  optional: true
+          volumeMounts:
+            - name: env-file
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+      volumes:
+        - name: env-file
+          secret:
+            secretName: portal-escarlate-env
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-password-recovery
+spec:
+  selector:
+    app: node-password-recovery
+  ports:
+    - port: 3009
+      targetPort: 3009
+
+---
+# Email Service Node.js
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-email
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-email
+  template:
+    metadata:
+      labels:
+        app: node-email
+    spec:
+      containers:
+        - name: node-email
+          image: portal-escarlate-node:latest
+          imagePullPolicy: IfNotPresent
+          command: ["node", "--env-file=.env", "backend/src/services/email/server.js"]
+          env:
+            - name: EMAIL_SERVICE_PORT
+              value: "3006"
+            - name: HOST
+              value: "0.0.0.0"
+            - name: EMAIL_DATABASE_URL
+              value: "postgresql://portal:$(PORTAL_DB_PASSWORD)@postgres:5432/portal_escarlate?sslmode=disable"
+            - name: EVENT_SERVICE_URL
+              value: "http://node-events:3007"
+            - name: PORTAL_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portal-escarlate-env
+                  key: PORTAL_DB_PASSWORD
+                  optional: true
+          volumeMounts:
+            - name: env-file
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+      volumes:
+        - name: env-file
+          secret:
+            secretName: portal-escarlate-env
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-email
+spec:
+  selector:
+    app: node-email
+  ports:
+    - port: 3006
+      targetPort: 3006
+
+---
+# Gateway Node.js
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-gateway
+  template:
+    metadata:
+      labels:
+        app: node-gateway
+    spec:
+      containers:
+        - name: node-gateway
+          image: portal-escarlate-node:latest
+          imagePullPolicy: IfNotPresent
+          command: ["node", "--env-file=.env", "backend/src/server.js"]
+          env:
+            - name: PORT
+              value: "3000"
+            - name: HOST
+              value: "0.0.0.0"
+            - name: AUTH_SERVICE_URL
+              value: "http://node-auth:3001"
+            - name: REGISTRATION_SERVICE_URL
+              value: "http://node-registration:3003"
+            - name: PASSWORD_RECOVERY_SERVICE_URL
+              value: "http://node-password-recovery:3009"
+            - name: EMAIL_SERVICE_URL
+              value: "http://node-email:3006"
+            - name: NEWS_SERVICE_URL
+              value: "http://node-news:3002"
+            - name: AI_SERVICE_URL
+              value: "http://node-ai:3004"
+            - name: NEWS_SUMMARY_SERVICE_URL
+              value: "http://node-news-summary:3005"
+            - name: ARTICLE_SUMMARY_SERVICE_URL
+              value: "http://node-article-summary:3008"
+            - name: EVENT_SERVICE_URL
+              value: "http://node-events:3007"
+          volumeMounts:
+            - name: env-file
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+      volumes:
+        - name: env-file
+          secret:
+            secretName: portal-escarlate-env
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-gateway
 spec:
   type: NodePort
-
   selector:
-    app: portal-escarlate
-
+    app: node-gateway
   ports:
-    - protocol: TCP
-      port: 5173
+    - port: 3000
+      targetPort: 3000
+      nodePort: 30000
+
+# =============================================================================
+# BACKEND DART
+# =============================================================================
+
+---
+# Auth Service Dart
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dart-auth
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dart-auth
+  template:
+    metadata:
+      labels:
+        app: dart-auth
+    spec:
+      containers:
+        - name: dart-auth
+          image: portal-escarlate-dart-auth:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: HTTP_HOST
+              value: "0.0.0.0"
+            - name: HTTP_PORT
+              value: "3001"
+            - name: NATS_URL
+              value: "nats://nats:4222"
+            - name: DATABASE_URL
+              value: "postgresql://portal:$(PORTAL_DB_PASSWORD)@postgres:5432/auth_db?sslmode=disable"
+            - name: PORTAL_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portal-escarlate-env
+                  key: PORTAL_DB_PASSWORD
+                  optional: true
+          volumeMounts:
+            - name: env-file
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+      volumes:
+        - name: env-file
+          secret:
+            secretName: portal-escarlate-env
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dart-auth
+spec:
+  selector:
+    app: dart-auth
+  ports:
+    - port: 3001
+      targetPort: 3001
+
+---
+# Registration Service Dart
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dart-registration
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dart-registration
+  template:
+    metadata:
+      labels:
+        app: dart-registration
+    spec:
+      containers:
+        - name: dart-registration
+          image: portal-escarlate-dart-registration:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: HTTP_HOST
+              value: "0.0.0.0"
+            - name: HTTP_PORT
+              value: "3003"
+            - name: NATS_URL
+              value: "nats://nats:4222"
+            - name: AUTH_SERVICE_URL
+              value: "http://dart-auth:3001"
+            - name: REGISTRATION_EVENTS_ENABLED
+              value: "true"
+            - name: DATABASE_URL
+              value: "postgresql://portal:$(PORTAL_DB_PASSWORD)@postgres:5432/registration_db?sslmode=disable"
+            - name: PORTAL_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portal-escarlate-env
+                  key: PORTAL_DB_PASSWORD
+                  optional: true
+          volumeMounts:
+            - name: env-file
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+      volumes:
+        - name: env-file
+          secret:
+            secretName: portal-escarlate-env
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dart-registration
+spec:
+  selector:
+    app: dart-registration
+  ports:
+    - port: 3003
+      targetPort: 3003
+
+---
+# Password Recovery Service Dart
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dart-password-recovery
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dart-password-recovery
+  template:
+    metadata:
+      labels:
+        app: dart-password-recovery
+    spec:
+      containers:
+        - name: dart-password-recovery
+          image: portal-escarlate-dart-recovery:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: HTTP_HOST
+              value: "0.0.0.0"
+            - name: HTTP_PORT
+              value: "3009"
+            - name: NATS_URL
+              value: "nats://nats:4222"
+            - name: AUTH_SERVICE_URL
+              value: "http://dart-auth:3001"
+            - name: PASSWORD_RECOVERY_EVENTS_ENABLED
+              value: "true"
+            - name: DATABASE_URL
+              value: "postgresql://portal:$(PORTAL_DB_PASSWORD)@postgres:5432/password_recovery_db?sslmode=disable"
+            - name: PORTAL_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portal-escarlate-env
+                  key: PORTAL_DB_PASSWORD
+                  optional: true
+          volumeMounts:
+            - name: env-file
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+      volumes:
+        - name: env-file
+          secret:
+            secretName: portal-escarlate-env
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dart-password-recovery
+spec:
+  selector:
+    app: dart-password-recovery
+  ports:
+    - port: 3009
+      targetPort: 3009
+
+---
+# Email Service Dart
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dart-email
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dart-email
+  template:
+    metadata:
+      labels:
+        app: dart-email
+    spec:
+      containers:
+        - name: dart-email
+          image: portal-escarlate-dart-email:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: HTTP_HOST
+              value: "0.0.0.0"
+            - name: HTTP_PORT
+              value: "3005"
+            - name: NATS_URL
+              value: "nats://nats:4222"
+            - name: EMAIL_EVENTS_ENABLED
+              value: "true"
+            - name: REGISTRATION_SERVICE_URL
+              value: "http://dart-registration:3003"
+            - name: PASSWORD_RECOVERY_SERVICE_URL
+              value: "http://dart-password-recovery:3009"
+            - name: DATABASE_URL
+              value: "postgresql://portal:$(PORTAL_DB_PASSWORD)@postgres:5432/email_db?sslmode=disable"
+            - name: PORTAL_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: portal-escarlate-env
+                  key: PORTAL_DB_PASSWORD
+                  optional: true
+          volumeMounts:
+            - name: env-file
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+      volumes:
+        - name: env-file
+          secret:
+            secretName: portal-escarlate-env
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dart-email
+spec:
+  selector:
+    app: dart-email
+  ports:
+    - port: 3005
+      targetPort: 3005
+
+---
+# Gateway Dart (porta 3100)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dart-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dart-gateway
+  template:
+    metadata:
+      labels:
+        app: dart-gateway
+    spec:
+      containers:
+        - name: dart-gateway
+          image: portal-escarlate-dart:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: HTTP_HOST
+              value: "0.0.0.0"
+            - name: HTTP_PORT
+              value: "3100"
+            - name: NATS_URL
+              value: "nats://nats:4222"
+            - name: LEGACY_BACKEND_URL
+              value: "http://node-gateway:3000"
+            - name: AUTH_SERVICE_URL
+              value: "http://dart-auth:3001"
+            - name: REGISTRATION_SERVICE_URL
+              value: "http://dart-registration:3003"
+            - name: PASSWORD_RECOVERY_SERVICE_URL
+              value: "http://dart-password-recovery:3009"
+            - name: EMAIL_SERVICE_URL
+              value: "http://dart-email:3005"
+          volumeMounts:
+            - name: env-file
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+      volumes:
+        - name: env-file
+          secret:
+            secretName: portal-escarlate-env
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dart-gateway
+spec:
+  type: NodePort
+  selector:
+    app: dart-gateway
+  ports:
+    - port: 3100
+      targetPort: 3100
+      nodePort: 30100
+
+# =============================================================================
+# FRONTEND
+# =============================================================================
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: portal-escarlate-node:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5173
+          env:
+            - name: FRONTEND_HOST
+              value: "0.0.0.0"
+            - name: FRONTEND_PORT
+              value: "5173"
+            - name: NODE_ENV
+              value: "production"
+          volumeMounts:
+            - name: env-file
+              mountPath: /app/.env
+              subPath: .env
+              readOnly: true
+      volumes:
+        - name: env-file
+          secret:
+            secretName: portal-escarlate-env
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+spec:
+  type: NodePort
+  selector:
+    app: frontend
+  ports:
+    - port: 5173
       targetPort: 5173
       nodePort: 30080
