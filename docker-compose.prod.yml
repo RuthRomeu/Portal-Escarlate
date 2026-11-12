@@ -1,0 +1,345 @@
+# Composição de produção — Portal Escarlate
+# Inclui backend Node.js, backend Dart, PostgreSQL, NATS e frontend.
+#
+# Como usar:
+#   docker compose -f docker-compose.prod.yml up --build -d
+#
+# Variáveis de ambiente carregadas do .env na raiz do projeto.
+# Certifique-se de copiar .env.example para .env e preencher os valores.
+
+x-restart: &restart
+  restart: unless-stopped
+
+x-node-base: &node-base
+  <<: *restart
+  build:
+    context: .
+    dockerfile: Dockerfile
+  env_file: .env
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+x-dart-base: &dart-base
+  <<: *restart
+  build:
+    context: ./backend-dart
+    dockerfile: Dockerfile
+  depends_on:
+    postgres:
+      condition: service_healthy
+    nats:
+      condition: service_started
+  environment:
+    HTTP_HOST: 0.0.0.0
+    PORTAL_INTERNAL_TOKEN: ${PORTAL_INTERNAL_TOKEN:-change-this-long-random-value}
+    NATS_URL: nats://nats:4222
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Infraestrutura
+  # ---------------------------------------------------------------------------
+
+  postgres:
+    image: postgres:17-alpine
+    <<: *restart
+    environment:
+      POSTGRES_USER: portal
+      POSTGRES_PASSWORD: ${PORTAL_DB_PASSWORD:-change-me}
+      POSTGRES_DB: portal_escarlate
+    volumes:
+      # Script de init do Dart: cria os bancos separados por serviço
+      - ./backend-dart/infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/01-dart-init.sql:ro
+      # Schema do Dart: cria tabelas nos bancos separados
+      - ./backend-dart/infrastructure/postgres/schema.sql:/docker-entrypoint-initdb.d/02-dart-schema.sql:ro
+      # Schemas do Node.js: arquivos originais aplicados no banco portal_escarlate
+      - ./scripts/init-node-portal.sh:/docker-entrypoint-initdb.d/03-node-schemas.sh:ro
+      - ./auth.sql:/docker-entrypoint-initdb.d/auth.sql:ro
+      - ./registrar.sql:/docker-entrypoint-initdb.d/registrar.sql:ro
+      - ./password-recovery.sql:/docker-entrypoint-initdb.d/password-recovery.sql:ro
+      - ./email.sql:/docker-entrypoint-initdb.d/email.sql:ro
+      - ./news.sql:/docker-entrypoint-initdb.d/news.sql:ro
+      - ./ai.sql:/docker-entrypoint-initdb.d/ai.sql:ro
+      - ./article-summary.sql:/docker-entrypoint-initdb.d/article-summary.sql:ro
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U portal -d portal_escarlate"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "127.0.0.1:5435:5432"
+
+  nats:
+    image: nats:2.12-alpine
+    <<: *restart
+    command: ["--jetstream", "--store_dir", "/data"]
+    volumes:
+      - nats_data:/data
+    ports:
+      - "127.0.0.1:4222:4222"
+
+  # ---------------------------------------------------------------------------
+  # Backend Node.js
+  # ---------------------------------------------------------------------------
+
+  node_gateway:
+    <<: *node-base
+    command: ["node", "backend/src/server.js"]
+    environment:
+      PORT: "3000"
+      HOST: "0.0.0.0"
+      # Permite requisições do gateway Dart (LEGACY_BACKEND_URL) e do frontend
+      ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://dart_gateway:3100"
+      APP_URL: ${APP_URL:-http://localhost:5173}
+      AUTH_SERVICE_URL: http://node_auth:3001
+      REGISTRATION_SERVICE_URL: http://node_registration:3003
+      PASSWORD_RECOVERY_SERVICE_URL: http://node_password_recovery:3009
+      EMAIL_SERVICE_URL: http://node_email:3006
+      NEWS_SERVICE_URL: http://node_news:3002
+      AI_SERVICE_URL: http://node_ai:3004
+      NEWS_SUMMARY_SERVICE_URL: http://node_news_summary:3005
+      ARTICLE_SUMMARY_SERVICE_URL: http://node_article_summary:3008
+      EVENT_SERVICE_URL: http://node_events:3007
+    ports:
+      - "3000:3000"
+    depends_on:
+      - node_events
+      - node_auth
+      - node_news
+      - node_ai
+      - node_news_summary
+      - node_article_summary
+      - node_registration
+      - node_password_recovery
+      - node_email
+
+  node_events:
+    <<: *node-base
+    command: ["node", "backend/src/services/events/server.js"]
+    environment:
+      EVENT_SERVICE_PORT: "3007"
+      HOST: "0.0.0.0"
+      AUTH_SERVICE_URL: http://node_auth:3001
+      REGISTRATION_SERVICE_URL: http://node_registration:3003
+      PASSWORD_RECOVERY_SERVICE_URL: http://node_password_recovery:3009
+      EMAIL_SERVICE_URL: http://node_email:3006
+      NEWS_SERVICE_URL: http://node_news:3002
+      AI_SERVICE_URL: http://node_ai:3004
+      NEWS_SUMMARY_SERVICE_URL: http://node_news_summary:3005
+      ARTICLE_SUMMARY_SERVICE_URL: http://node_article_summary:3008
+
+  node_auth:
+    <<: *node-base
+    command: ["node", "backend/src/services/auth/server.js"]
+    environment:
+      AUTH_SERVICE_PORT: "3001"
+      HOST: "0.0.0.0"
+      AUTH_DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-change-me}@postgres:5432/portal_escarlate?sslmode=disable
+      EVENT_SERVICE_URL: http://node_events:3007
+
+  node_registration:
+    <<: *node-base
+    command: ["node", "backend/src/services/registration/server.js"]
+    environment:
+      REGISTRATION_SERVICE_PORT: "3003"
+      HOST: "0.0.0.0"
+      REGISTRATION_DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-change-me}@postgres:5432/portal_escarlate?sslmode=disable
+      AUTH_SERVICE_URL: http://node_auth:3001
+      EVENT_SERVICE_URL: http://node_events:3007
+
+  node_password_recovery:
+    <<: *node-base
+    command: ["node", "backend/src/services/password-recovery/server.js"]
+    environment:
+      PASSWORD_RECOVERY_SERVICE_PORT: "3009"
+      HOST: "0.0.0.0"
+      PASSWORD_RECOVERY_DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-change-me}@postgres:5432/portal_escarlate?sslmode=disable
+      AUTH_SERVICE_URL: http://node_auth:3001
+      EVENT_SERVICE_URL: http://node_events:3007
+
+  node_email:
+    <<: *node-base
+    command: ["node", "backend/src/services/email/server.js"]
+    environment:
+      EMAIL_SERVICE_PORT: "3006"
+      HOST: "0.0.0.0"
+      EMAIL_DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-change-me}@postgres:5432/portal_escarlate?sslmode=disable
+      EVENT_SERVICE_URL: http://node_events:3007
+
+  node_news:
+    <<: *node-base
+    command: ["node", "backend/src/services/news/server.js"]
+    environment:
+      NEWS_SERVICE_PORT: "3002"
+      HOST: "0.0.0.0"
+      NEWS_DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-change-me}@postgres:5432/portal_escarlate?sslmode=disable
+      EVENT_SERVICE_URL: http://node_events:3007
+      AI_SERVICE_URL: http://node_ai:3004
+
+  node_ai:
+    <<: *node-base
+    command: ["node", "backend/src/services/ai/server.js"]
+    environment:
+      AI_SERVICE_PORT: "3004"
+      HOST: "0.0.0.0"
+      AI_SERVICE_DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-change-me}@postgres:5432/portal_escarlate?sslmode=disable
+      EVENT_SERVICE_URL: http://node_events:3007
+
+  node_news_summary:
+    <<: *node-base
+    command: ["node", "backend/src/services/news-summary/server.js"]
+    environment:
+      NEWS_SUMMARY_SERVICE_PORT: "3005"
+      HOST: "0.0.0.0"
+      EVENT_SERVICE_URL: http://node_events:3007
+      AI_SERVICE_URL: http://node_ai:3004
+
+  node_article_summary:
+    <<: *node-base
+    command: ["node", "backend/src/services/article-summary/server.js"]
+    environment:
+      ARTICLE_SUMMARY_SERVICE_PORT: "3008"
+      HOST: "0.0.0.0"
+      ARTICLE_SUMMARY_DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-change-me}@postgres:5432/portal_escarlate?sslmode=disable
+      EVENT_SERVICE_URL: http://node_events:3007
+      AI_SERVICE_URL: http://node_ai:3004
+
+  # ---------------------------------------------------------------------------
+  # Backend Dart (gateway na 3100, roteia auth/registration/recovery/email em Dart;
+  # repassa news/AI/summaries para o gateway Node.js via LEGACY_BACKEND_URL)
+  # ---------------------------------------------------------------------------
+
+  dart_gateway:
+    <<: *dart-base
+    build:
+      context: ./backend-dart
+      dockerfile: Dockerfile
+      args:
+        APP: api_gateway
+    environment:
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: "3100"
+      PORTAL_INTERNAL_TOKEN: ${PORTAL_INTERNAL_TOKEN:-change-this-long-random-value}
+      NATS_URL: nats://nats:4222
+      APP_URL: ${APP_URL:-http://localhost:5173}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173}
+      # Repassa news/AI/summaries para o gateway Node.js
+      LEGACY_BACKEND_URL: http://node_gateway:3000
+      AUTH_SERVICE_URL: http://dart_auth:3001
+      REGISTRATION_SERVICE_URL: http://dart_registration:3003
+      PASSWORD_RECOVERY_SERVICE_URL: http://dart_password_recovery:3009
+      EMAIL_SERVICE_URL: http://dart_email:3005
+    ports:
+      - "3100:3100"
+    depends_on:
+      - node_gateway
+      - dart_auth
+      - dart_registration
+      - dart_password_recovery
+      - dart_email
+
+  dart_auth:
+    <<: *dart-base
+    build:
+      context: ./backend-dart
+      dockerfile: Dockerfile
+      args:
+        APP: auth_service
+    environment:
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: "3001"
+      AUTH_SECRET: ${AUTH_SECRET:-change-this-auth-secret}
+      APP_URL: ${APP_URL:-http://localhost:5173}
+      PORTAL_INTERNAL_TOKEN: ${PORTAL_INTERNAL_TOKEN:-change-this-long-random-value}
+      NATS_URL: nats://nats:4222
+      DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-change-me}@postgres:5432/auth_db?sslmode=disable
+
+  dart_registration:
+    <<: *dart-base
+    build:
+      context: ./backend-dart
+      dockerfile: Dockerfile
+      args:
+        APP: registration_service
+    environment:
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: "3003"
+      AUTH_SERVICE_URL: http://dart_auth:3001
+      APP_URL: ${APP_URL:-http://localhost:5173}
+      REGISTRATION_TOKEN_SECRET: ${REGISTRATION_TOKEN_SECRET:-change-this-registration-secret}
+      REGISTRATION_EVENTS_ENABLED: "true"
+      PORTAL_INTERNAL_TOKEN: ${PORTAL_INTERNAL_TOKEN:-change-this-long-random-value}
+      NATS_URL: nats://nats:4222
+      DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-change-me}@postgres:5432/registration_db?sslmode=disable
+
+  dart_password_recovery:
+    <<: *dart-base
+    build:
+      context: ./backend-dart
+      dockerfile: Dockerfile
+      args:
+        APP: password_recovery_service
+    environment:
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: "3009"
+      AUTH_SERVICE_URL: http://dart_auth:3001
+      APP_URL: ${APP_URL:-http://localhost:5173}
+      PASSWORD_RECOVERY_TOKEN_SECRET: ${PASSWORD_RECOVERY_TOKEN_SECRET:-change-this-recovery-secret}
+      PASSWORD_RECOVERY_EVENTS_ENABLED: "true"
+      PORTAL_INTERNAL_TOKEN: ${PORTAL_INTERNAL_TOKEN:-change-this-long-random-value}
+      NATS_URL: nats://nats:4222
+      DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-change-me}@postgres:5432/password_recovery_db?sslmode=disable
+
+  dart_email:
+    <<: *dart-base
+    build:
+      context: ./backend-dart
+      dockerfile: Dockerfile
+      args:
+        APP: email_service
+    environment:
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: "3005"
+      AUTH_SECRET: ${AUTH_SECRET:-change-this-auth-secret}
+      SECRETS_ENCRYPTION_KEY: ${SECRETS_ENCRYPTION_KEY:-change-this-encryption-key}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3100/api/google/callback}
+      APP_URL: ${APP_URL:-http://localhost:5173}
+      REGISTRATION_SERVICE_URL: http://dart_registration:3003
+      PASSWORD_RECOVERY_SERVICE_URL: http://dart_password_recovery:3009
+      EMAIL_EVENTS_ENABLED: "true"
+      PORTAL_INTERNAL_TOKEN: ${PORTAL_INTERNAL_TOKEN:-change-this-long-random-value}
+      NATS_URL: nats://nats:4222
+      DATABASE_URL: postgresql://portal:${PORTAL_DB_PASSWORD:-change-me}@postgres:5432/email_db?sslmode=disable
+
+  # ---------------------------------------------------------------------------
+  # Frontend React
+  # ---------------------------------------------------------------------------
+
+  frontend:
+    <<: *restart
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # VITE_API_URL vazio = URLs relativas no browser (proxy pelo serve-frontend.js)
+        VITE_API_URL: ""
+    env_file: .env
+    command: ["node", "scripts/serve-frontend.js"]
+    environment:
+      NODE_ENV: production
+      FRONTEND_HOST: "0.0.0.0"
+      FRONTEND_PORT: "5173"
+      # Aponta para o gateway Node.js para o frontend web
+      VITE_API_URL: http://node_gateway:3000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - node_gateway
+
+volumes:
+  pg_data:
+  nats_data:
