@@ -1,156 +1,292 @@
 # Portal Escarlate
 
-Plataforma de notícias com inteligência artificial desenvolvida como Trabalho Semestral para as disciplinas de Linguagens de Programação 2 e Arquitetura de Sistemas Computacionais. O portal oferece curadoria e tecnologia em uma experiência digital moderna, buscando notícias reais e gerando resumos sintetizados através de IA.
-
-## 👥 Integrantes da Equipe
-* Luigi de Menezes Collesi (RA: 23.00625-0)
-* Luigi de Lauand Botto (RA: 23.01066-5)
-* Enzo Pistori Fontenele (RA: 23.00768-0)
-* Ruth Ramos Romeu (RA: 22.01003-3)
+**Plataforma de notícias com inteligência artificial**  
+Notícias, curadoria e tecnologia em uma experiência digital moderna.
 
 ---
 
-## 🏛️ Arquitetura do Sistema
+## 👥 Integrantes da equipe
 
-A plataforma foi desenhada utilizando uma arquitetura robusta de microsserviços. O sistema é dividido entre uma aplicação Front-end em React e um Back-end em Node.js que rodam em uma Máquina Virtual Linux.
+Em ordem alfabética:
 
-O Back-end concentra todas as regras de negócio e integrações, possuindo um **Gateway HTTP** (na porta 3000) que recebe as requisições e as roteia internamente através de um barramento centralizado chamado **Event Service**. 
-
-Para garantir a independência e segurança dos dados, não há relacionamento cruzado entre os bancos: cada microsserviço possui e gerencia seu próprio banco de dados PostgreSQL dedicado.
-
----
-
-## ⚙️ Microsserviços
-
-O back-end é composto por 9 serviços independentes:
-
-* **Auth Service (Porta 3001):** Gerencia login, sessões, cookies (HttpOnly) e validação dos dados da conta.
-* **News Service (Porta 3002):** Responsável por buscar notícias, realizar a paginação (20 por página), salvar histórico e gerar métricas.
-* **Registration Service (Porta 3003):** Cuida do cadastro, tokens de verificação e confirmação de e-mail.
-* **AI Service (Porta 3004):** Executa as requisições ao provedor de IA externo, com sistemas de fallback de chaves e modelos.
-* **News Summary Service (Porta 3005):** Monta os prompts a partir da página de notícias e solicita resumos centrais ao AI Service.
-* **Email Service (Porta 3006):** Gerencia a conexão OAuth com o Google, validando refresh tokens e enviando e-mails automáticos.
-* **Event Service (Porta 3007):** Barramento interno que centraliza, registra e distribui eventos entre os microsserviços.
-* **Article Summary Service (Porta 3008):** Resume artigos individuais por URL, gerenciando um cache persistente recuperável via UUID.
-* **Password Recovery Service (Porta 3009):** Gerencia as solicitações de mudança de senha e tokens temporários.
+| RA | Nome completo |
+|---|---|
+| 23.00768-0 | Enzo Pistori Fontenele |
+| 23.01066-5 | Luigi de Lauand Botto |
+| 23.00625-0 | Luigi de Menezes Collesi |
+| 22.01003-3 | Ruth Ramos Romeu |
 
 ---
 
-## 🛠️ Tecnologias Utilizadas
+## 📱 Sobre o projeto
+
+O Portal Escarlate é uma plataforma de notícias com inteligência artificial que permite ao usuário buscar, ler e compreender as principais notícias do mundo de forma mais rápida e inteligente. Em vez de navegar por dezenas de páginas dispersas, o usuário encontra tudo em um único lugar: resultados agregados de fontes confiáveis, resumos gerados por IA e histórico personalizado.
+
+### O que o Portal Escarlate oferece?
+
+- **Busca inteligente de notícias** — pesquise qualquer tema e receba artigos de fontes reais organizados e paginados, sem precisar sair do app
+- **Resumos com IA** — cada página de resultados gera automaticamente uma síntese central produzida por inteligência artificial, economizando tempo de leitura
+- **Resumo individual de artigo** — qualquer artigo pode ser resumido por IA com um clique, com link compartilhável único
+- **Autenticação segura** — cadastro com verificação de e-mail, login com cookie HttpOnly e recuperação de senha por link temporário
+- **Interface mobile e web** — acesse pelo browser (React/Vite) ou pelo aplicativo Flutter (Android/iOS)
+- **Painel administrativo** — métricas de temas pesquisados, gráficos de volume e gerenciamento de conexões de e-mail
+
+---
+
+## 🏛️ Arquitetura
+
+### Back-end — microsserviços Node.js + Dart
+
+O back-end usa arquitetura de microsserviços híbrida. As requisições entram pelo **Gateway Dart (porta 3100)**, que roteia para serviços Dart (auth, registro, recuperação, e-mail) ou repassa para o **Gateway Node.js (porta 3000)** via `LEGACY_BACKEND_URL` para os serviços de notícias e IA.
+
+O gateway Node.js roteia internamente via **Event Service (porta 3007)** — barramento de eventos implementado manualmente.
+
+| Serviço | Porta | Linguagem | Responsabilidade |
+|---|---|---|---|
+| Gateway Dart | 3100 | Dart | Entrada principal, CORS, roteamento híbrido |
+| Gateway Node.js | 3000 | Node.js | Roteamento via event bus para news/AI/summaries |
+| Auth Service | 3001 | Dart | Login, sessões JWT, cookies HttpOnly |
+| Registration Service | 3003 | Dart | Cadastro, tokens de verificação, e-mail via NATS |
+| AI Service | 3004 | Node.js | Completions OpenRouter, fallback de chaves/modelos |
+| Email Service | 3005 | Dart | OAuth Gmail, envio via NATS JetStream |
+| News Summary Service | 3006 | Node.js | Prompts de resumo central por página |
+| Event Service | 3007 | Node.js | Barramento manual de eventos e service requests |
+| Article Summary Service | 3008 | Node.js | Cache de resumos por URL, link compartilhável |
+| News Service | 3002 | Node.js | Busca NewsAPI, histórico, métricas |
+| Password Recovery Service | 3009 | Dart | Tokens de recuperação de senha via NATS |
 
 ### Front-end
-* **React & Vite:** Para construção da interface de usuário e servidor de desenvolvimento/build rápido.
-* **TypeScript:** Para tipagem estática e redução de erros em desenvolvimento.
-* **React Router DOM:** Para navegação e gerenciamento das rotas das páginas.
-* **Zod:** Para validação tipada de dados e formulários.
 
-### Back-end
-* **Node.js Nativo:** Utilização extensiva de módulos nativos (`node:http`, `node:crypto`, `node:fs`, `node:net`) visando performance e controle sem excesso de frameworks pesados.
-* **Argon2:** Para geração e verificação de hashes criptográficos das senhas.
-* **Zod:** Para validação de payloads e schemas no lado do servidor.
-* **pg (node-postgres):** Para a comunicação direta com os bancos PostgreSQL.
-* **Google APIs:** Para integração com OAuth 2.0 e disparo de e-mails pelo Gmail.
+| Interface | Tecnologia | Localização |
+|---|---|---|
+| Web | React + Vite + TypeScript | `frontend/` |
+| Mobile | Flutter (Android / iOS) | `mobile/` |
 
-### Bancos de Dados
-* **PostgreSQL:** Bancos isolados por domínio (ex: `auth_db`, `news_db`, `ai_db`, `email_db`, etc.).
+### Banco de dados
+
+PostgreSQL com isolamento por domínio. Os serviços Dart usam bancos separados (`auth_db`, `registration_db`, `password_recovery_db`, `email_db`). Os serviços Node.js compartilham o banco `portal_escarlate`.
+
+### Mensageria
+
+**NATS JetStream** — usado pelos serviços Dart para comunicação assíncrona entre Registration/Password Recovery e Email Service (padrão outbox → NATS → inbox).
+
+### Integrações externas
+
+- **NewsAPI.org** — busca de artigos reais
+- **OpenRouter** — gateway de IA (suporte a GPT-4o, Claude, Llama, etc.)
+- **Gmail API / Google OAuth** — envio de e-mails transacionais
 
 ---
 
-## 🔗 Integrações Externas (APIs)
+## 🚀 Como executar
 
-* **NewsAPI.org:** Utilizada pelo News Service para a busca estruturada de artigos e notícias.
-* **OpenRouter:** Funciona como o Gateway de Inteligência Artificial para as requisições gerativas do AI Service.
-* **Gmail API / Google OAuth:** Utilizada pelo Email Service para envio de links transacionais e gestão de permissões administrativas de disparo.
+### Pré-requisitos
 
-### Execução com Docker
+- Docker Desktop
+- Flutter SDK ≥ 3.13 (para o app mobile)
 
-Crie um arquivo .env na raiz do projeto utilizando .env.example como referência.
-
-Crie a imagem Docker:
+### 1. Configurar variáveis de ambiente
 
 ```bash
-docker build -t portal-escarlate:dev .
+cp .env.example .env
+# Edite .env com suas credenciais
 ```
 
-Execute a aplicação localmente:
+Variáveis obrigatórias no `.env`:
+
+```env
+AUTH_SECRET=<valor-aleatório>
+PORTAL_INTERNAL_TOKEN=<valor-aleatório>
+INTERNAL_SERVICE_TOKEN=<mesmo-valor-do-PORTAL_INTERNAL_TOKEN>
+SECRETS_ENCRYPTION_KEY=<valor-aleatório>
+PORTAL_DB_PASSWORD=<senha-do-postgres>
+REGISTRATION_TOKEN_SECRET=<valor-aleatório-min-32-chars>
+PASSWORD_RECOVERY_TOKEN_SECRET=<valor-aleatório-min-32-chars>
+GOOGLE_CLIENT_ID=<seu-google-client-id>
+GOOGLE_CLIENT_SECRET=<seu-google-client-secret>
+APP_URL=http://localhost:5173
+```
+
+### 2. Subir o stack completo com Docker Compose
 
 ```bash
-docker run \
-  --rm \
-  --name portal-escarlate-local \
-  -p "127.0.0.1:5173:5173" \
-  -v "$(pwd)/.env:/app/.env:ro" \
-  -e NODE_ENV="development" \
-  -e APP_URL="http://localhost:5173" \
-  -e FRONTEND_HOST="0.0.0.0" \
-  -e FRONTEND_PORT="5173" \
-  -e VITE_API_URL="http://127.0.0.1:3000" \
-  portal-escarlate:dev
+docker compose -f docker-compose.prod.yml up -d
 ```
 
-Acesse a aplicação em:
-
-```text
-http://localhost:5173
-```
-
-### Execução com Kubernetes
-
-O projeto possui um manifesto Kubernetes em:
-
-```text
-kubernetes/portal-escarlate.yaml
-```
-
-O manifesto cria:
-
-- um `Deployment` responsável pela execução da aplicação;
-- um `Pod` utilizando a imagem Docker `portal-escarlate:dev`;
-- um `Service` do tipo `NodePort` para disponibilizar a aplicação.
-
-Para execução em um cluster local utilizando Minikube, primeiro construa a imagem Docker:
+Aguarde ~30 segundos. Para verificar que tudo subiu:
 
 ```bash
-docker build -t portal-escarlate:dev .
+docker compose -f docker-compose.prod.yml ps
 ```
 
-Carregue a imagem no Minikube:
+Todos os 18 containers devem mostrar `Up`.
 
+### 3. Popular o banco (apenas na primeira vez)
+
+**Usuário admin:**
 ```bash
-minikube image load portal-escarlate:dev
+# Banco Node.js
+docker exec portal-escarlate-postgres-1 psql -U portal -d portal_escarlate -c \
+  "INSERT INTO users_2 (email, password, role) VALUES ('admin@exemplo.com', '\$argon2id\$v=19\$m=19456,t=2,p=1\$DqIpCM7E1wU5as0gnr2pVg\$zRGefO2dFJo3QMkVkyLQwfkx1em/C1GYnfjfu4I3Vq8', 'admin');"
+
+# Banco Dart (mesmas credenciais, banco separado)
+docker exec portal-escarlate-postgres-1 psql -U portal -d auth_db -c \
+  "INSERT INTO users_2 (email, password, role) VALUES ('admin@exemplo.com', '\$argon2id\$v=19\$m=19456,t=2,p=1\$DqIpCM7E1wU5as0gnr2pVg\$zRGefO2dFJo3QMkVkyLQwfkx1em/C1GYnfjfu4I3Vq8', 'admin');"
 ```
 
-Antes de criar o Pod, disponibilize o arquivo `.env` para o Kubernetes através de um Secret:
+> A senha do exemplo acima é `Teste@123`. Para gerar um hash de outra senha:
+> ```bash
+> cd backend && node --input-type=module -e "import argon2 from 'argon2'; console.log(await argon2.hash('SuaSenha@123', {type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1}));"
+> ```
 
+**Chaves de API (NewsAPI e OpenRouter):**
 ```bash
-kubectl create secret generic portal-escarlate-env \
-  --from-file=.env=.env \
-  --dry-run=client \
-  -o yaml | kubectl apply -f -
+docker exec portal-escarlate-postgres-1 psql -U portal -d portal_escarlate -c \
+  "INSERT INTO news_api_keys (provider, api_key, active, priority) VALUES ('newsapi', 'SUA_CHAVE_NEWSAPI', true, 100);"
+
+docker exec portal-escarlate-postgres-1 psql -U portal -d portal_escarlate -c \
+  "INSERT INTO ai_api_keys (provider, label, api_key, active, priority) VALUES ('openrouter', 'Chave principal', 'SUA_CHAVE_OPENROUTER', true, 100) RETURNING id;"
+
+# Use o UUID retornado acima
+docker exec portal-escarlate-postgres-1 psql -U portal -d portal_escarlate -c \
+  "INSERT INTO ai_models (api_key_id, model, active, priority) VALUES ('UUID-RETORNADO', 'openai/gpt-4o-mini', true, 100), ('UUID-RETORNADO', 'openai/gpt-3.5-turbo', true, 200);"
 ```
 
-Em seguida, instancie os recursos definidos no manifesto:
+### 4. Conectar conta Gmail (para envio de e-mails)
+
+1. Acesse `http://localhost:5173` no browser
+2. Faça login com a conta admin
+3. Vá em **Painel Admin → Conexões de E-mail → Conectar conta Google**
+4. Autorize o acesso no Google
+
+> O `GOOGLE_REDIRECT_URI` no `.env` deve ser `http://localhost:3100/api/google/callback`.  
+> Adicione essa URI nas **Authorized redirect URIs** do seu app no Google Cloud Console.
+
+### 5. Rodar o app Flutter (mobile)
 
 ```bash
+cd mobile
+flutter pub get
+
+# Dispositivo físico Android (substitua pelo IP da sua máquina)
+flutter run --dart-define=API_URL=http://SEU_IP:3100
+
+# Emulador Android
+flutter run --dart-define=API_URL=http://10.0.2.2:3100
+
+# iOS Simulator
+flutter run --dart-define=API_URL=http://localhost:3100
+```
+
+### 6. Parar o stack
+
+```bash
+docker compose -f docker-compose.prod.yml down
+```
+
+Para apagar também os dados do banco:
+```bash
+docker compose -f docker-compose.prod.yml down -v
+```
+
+---
+
+## 🐳 Build das imagens Docker
+
+### Imagem Node.js + Frontend
+
+```bash
+docker build -t portal-escarlate-node:latest .
+```
+
+### Imagens Dart
+
+```bash
+docker build -t portal-escarlate-dart:latest \
+  --build-arg APP=api_gateway ./backend-dart
+
+docker build -t portal-escarlate-dart-auth:latest \
+  --build-arg APP=auth_service ./backend-dart
+
+docker build -t portal-escarlate-dart-registration:latest \
+  --build-arg APP=registration_service ./backend-dart
+
+docker build -t portal-escarlate-dart-recovery:latest \
+  --build-arg APP=password_recovery_service ./backend-dart
+
+docker build -t portal-escarlate-dart-email:latest \
+  --build-arg APP=email_service ./backend-dart
+```
+
+Ou use o `Makefile`:
+
+```bash
+make docker-build   # builda todas as imagens
+make docker-up      # sobe o stack completo
+make docker-down    # para o stack
+```
+
+---
+
+## ☸️ Kubernetes (Minikube)
+
+```bash
+# Iniciar Minikube
+minikube start --driver=docker
+
+# Buildar e carregar imagens
+make k8s-build
+
+# Criar Secret com variáveis de ambiente
+make k8s-secret
+
+# Aplicar manifesto
 kubectl apply -f kubernetes/portal-escarlate.yaml
+
+# Verificar recursos
+kubectl get pods,services
+
+# Obter URLs dos serviços
+make k8s-urls
 ```
 
-Para acompanhar a inicialização do Deployment:
+**NodePorts expostos:**
 
-```bash
-kubectl rollout status deployment/portal-escarlate
+| Serviço | NodePort |
+|---|---|
+| Frontend | 30080 |
+| Gateway Node.js | 30000 |
+| Gateway Dart | 30100 |
+
+---
+
+## 📁 Estrutura do repositório
+
+```
+Portal-Escarlate/
+  backend/          Node.js — Gateway + microsserviços (news, AI, summaries, events)
+  backend-dart/     Dart — microsserviços (Gateway, Auth, Registration, Email, Recovery)
+  frontend/         React/Vite — interface web
+  mobile/           Flutter — aplicativo Android/iOS
+  kubernetes/       Manifesto Kubernetes completo
+  scripts/          Scripts de build e inicialização
+  Makefile          Atalhos para Docker e Kubernetes
+  docker-compose.prod.yml  Stack de produção completo (18 containers)
+  *.sql             Schemas de banco de dados por domínio
+  Dockerfile        Build da imagem Node.js + frontend
+  .env.example      Modelo de variáveis de ambiente
 ```
 
-Para verificar os recursos criados:
+---
 
-```bash
-kubectl get deployment portal-escarlate
-kubectl get pods -l app=portal-escarlate
-kubectl get service portal-escarlate
-```
+## 📜 Conventional Commits
 
-Em um cluster Minikube, obtenha a URL da aplicação com:
+Este repositório segue o padrão [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
-```bash
-minikube service portal-escarlate --url
-```
+Exemplos de tipos usados:
+- `feat(mobile):` nova tela ou integração no Flutter
+- `feat(backend):` novo microsserviço ou funcionalidade
+- `feat(infra):` Docker, Kubernetes, CI
+- `fix:` correção de bug
+- `docs:` atualização de documentação
+- `chore:` tarefas de manutenção
