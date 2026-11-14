@@ -7,19 +7,23 @@ import 'package:crypto/crypto.dart';
 /// the action URL or bearer token.
 class RegistrationTokens {
   RegistrationTokens(this.secret, {DateTime Function()? clock})
-      : clock = clock ?? DateTime.now {
+    : clock = clock ?? DateTime.now {
     if (secret.length < 32) {
-      throw ArgumentError('REGISTRATION_TOKEN_SECRET deve ter >=32 caracteres.');
+      throw ArgumentError(
+        'REGISTRATION_TOKEN_SECRET deve ter >=32 caracteres.',
+      );
     }
   }
 
   final String secret;
   final DateTime Function() clock;
-  static const ttl = Duration(minutes: 5);
+  static const ttl = Duration(hours: 24);
 
   String codeFor(String requestId) {
-    final raw = Hmac(sha256, utf8.encode(secret))
-        .convert(utf8.encode('registration:' + requestId));
+    final raw = Hmac(
+      sha256,
+      utf8.encode(secret),
+    ).convert(utf8.encode('registration:' + requestId));
     return base64Url.encode(raw.bytes).replaceAll('=', '');
   }
 
@@ -31,8 +35,8 @@ class RegistrationTokens {
             !(appUrl.scheme == 'http' && appUrl.host == 'localhost'))) {
       throw ArgumentError('APP_URL deve usar HTTPS ou localhost.');
     }
-    return appUrl.resolve('/verify-email').replace(
-      queryParameters: {'code': codeFor(requestId)},
-    );
+    return appUrl
+        .resolve('/verify-email')
+        .replace(queryParameters: {'code': codeFor(requestId)});
   }
 }

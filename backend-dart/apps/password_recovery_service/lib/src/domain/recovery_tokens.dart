@@ -5,19 +5,23 @@ import 'package:crypto/crypto.dart';
 /// Only the SHA-256 digest is saved in PostgreSQL; NATS sees requestId only.
 class RecoveryTokens {
   RecoveryTokens(this.secret, {DateTime Function()? clock})
-      : clock = clock ?? DateTime.now {
+    : clock = clock ?? DateTime.now {
     if (secret.length < 32) {
-      throw ArgumentError('PASSWORD_RECOVERY_TOKEN_SECRET precisa de >=32 caracteres.');
+      throw ArgumentError(
+        'PASSWORD_RECOVERY_TOKEN_SECRET precisa de >=32 caracteres.',
+      );
     }
   }
 
   final String secret;
   final DateTime Function() clock;
-  static const ttl = Duration(minutes: 5);
+  static const ttl = Duration(hours: 24);
 
   String codeFor(String requestId) {
-    final digest = Hmac(sha256, utf8.encode(secret))
-        .convert(utf8.encode('password-recovery:' + requestId));
+    final digest = Hmac(
+      sha256,
+      utf8.encode(secret),
+    ).convert(utf8.encode('password-recovery:' + requestId));
     return base64Url.encode(digest.bytes).replaceAll('=', '');
   }
 
@@ -29,8 +33,8 @@ class RecoveryTokens {
             !(appUrl.scheme == 'http' && appUrl.host == 'localhost'))) {
       throw ArgumentError('APP_URL deve ser HTTPS ou localhost.');
     }
-    return appUrl.resolve('/reset-password').replace(
-      queryParameters: {'code': codeFor(requestId)},
-    );
+    return appUrl
+        .resolve('/reset-password')
+        .replace(queryParameters: {'code': codeFor(requestId)});
   }
 }
